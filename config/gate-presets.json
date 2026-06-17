@@ -1,0 +1,4 @@
+{
+  "relaxed": ["deploy", "secrets_money", "access_change", "external_send", "migration_destructive"],
+  "strict": ["deploy", "secrets_money", "access_change", "external_send", "migration_destructive", "migration_additive", "merge", "dependency_add"]
+}
