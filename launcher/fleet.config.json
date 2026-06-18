@@ -1,0 +1,20 @@
+{
+  "head": "orch",
+  "workers": ["pm", "tl", "be", "fe", "plat", "qa", "sec"],
+  "model": "claude-sonnet-4-6",
+  "runtime_mode": "long-running-warm",
+  "throttle_5h_ceiling": 0.4,
+  "credentials": "per-profile COPY (never symlink — OAuth token rotation race)",
+  "pc": {
+    "system_root": "C:\\ZeeCloud\\Projects\\isolated-agent-system",
+    "work_repo": "C:\\ZeeCloud\\Projects\\agent-workspace",
+    "store": "C:\\ZeeCloud\\agentctl\\agentctl.db",
+    "wake": "C:\\ZeeCloud\\agentctl\\wake",
+    "cred_source": "%USERPROFILE%\\.claude\\.credentials.json"
+  },
+  "mac": {
+    "system_root": "~/Projects/isolated-agent-system",
+    "store": "~/.agentctl/agentctl.db",
+    "wake": "~/.agentctl/wake"
+  }
+}
