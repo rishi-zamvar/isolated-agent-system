@@ -12,7 +12,7 @@ Push-Location $SystemRoot
 try {
   Write-Host "=== git HEAD (report this for parity with Mac) ==="
   git rev-parse HEAD
-  Write-Host "=== python (need >= 3.13) ==="; python --version
+  Write-Host "=== python (need >= 3.10) ==="; python --version
   Write-Host "=== claude CLI ==="; claude --version
   Write-Host "=== unit suite (expect: 76 passed) ==="
   python -m pytest -q
