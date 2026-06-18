@@ -44,6 +44,18 @@ def init(path: Path) -> None:
 def insert(path: Path, env: dict) -> bool:
     """Insert an envelope. Returns True if newly stored, False if `id` already
     seen (idempotent no-op, R4)."""
+    row = {
+        "id": env["id"],
+        "type": env["type"],
+        "from_role": env["from_role"],
+        "to_role": env["to_role"],
+        "event": env["event"],
+        "context_ref": env.get("context_ref"),
+        "git_ref": env.get("git_ref"),
+        "payload": json.dumps(env.get("payload", {})),
+        "correlation_id": env.get("correlation_id"),
+        "created_at": env["created_at"],
+    }
     con = _connect(path)
     try:
         cur = con.execute(
@@ -54,7 +66,7 @@ def insert(path: Path, env: dict) -> bool:
             VALUES (:id, :type, :from_role, :to_role, :event, :context_ref,
                     :git_ref, :payload, :correlation_id, :created_at, 'open')
             """,
-            {**env, "payload": json.dumps(env.get("payload", {}))},
+            row,
         )
         con.commit()
         return cur.rowcount == 1
