@@ -51,6 +51,25 @@ Live task run; observability dashboard/metrics collection; daily-digest notifica
 
 ---
 
+## 2.1 Readiness-locked decisions (2026-06-17, from swe's PC measurement)
+
+The build-step-one readiness check (Section 10) ran on the PC and resolved the open unknowns. These supersede earlier assumptions where they conflict:
+
+| Item | Measured / decided |
+|---|---|
+| **Fleet auth** | **Viable.** N=3 isolated `CLAUDE_CONFIG_DIR` sessions ran concurrently — distinct session IDs, no token-clobbering, all Sonnet 4.6. → 8-profile design stands. **N=8 burn-in is a launcher verify-gate** (N=3 proven, not N=8). |
+| **Plan/pool** | **Max 20x**, OAuth (not API key; outbound needs `anthropic-beta: oauth-2025-04-20`). **Unified 5-hour token bucket** — no RPM/TPM. Idle ≈ free; **cold-start ~$0.07/instance paid once per session**. |
+| **Concurrency** | **Full 7 long-running *warm* panes** — warmth is cost-optimal here (cold-start is the expense). Add a **relay throttle at ≤0.4 of the 5h-bucket utilization** for burst headroom. |
+| **Multiplexer** | **tmux is OUT** (no tmux/WSL/Windows Terminal on Win10 Pro). Launcher uses **Windows-native `Start-Process` + per-role log files** (`logs\<role>.out`), watched via `Get-Content -Wait -Tail`, supervised by PowerShell jobs or NSSM. "Watch a pane live" → "tail that role's log." |
+| **Credentials** | Each profile gets its **own `.credentials.json` COPY, not a symlink** (OAuth token-rotation rewrites the file → symlink = write race). Launcher `Copy-Item` per profile. |
+| **Resources** | Ryzen 7 3700X (8/16 cores), 16 GB RAM (~8 free). 8 idle CC ≈ 3–4 GB. **Tight but workable** — close Chrome during fleet ops; 32 GB is the proper upgrade (not required for v1). CPU not a bottleneck. |
+| **Env** | `claude 2.1.181`; PC user home `C:\Users\zeebo`; auth via `~/.claude/.credentials.json`. |
+| **Model fallback (deferred)** | At ≥50% pool utilization the account **auto-falls back to cheaper models** — could silently downgrade SEC/TL mid-burst and weaken the adversarial check. *Live-run* concern, not a scaffolding blocker → tracked in Section 11. |
+
+**Spec deviation recorded:** the original spec assumed `tmux` for the launcher/observability. That is replaced by the Windows-native pattern above. All "tmux" references elsewhere in this doc should be read as "the Windows-native Start-Process + per-role-log launcher."
+
+---
+
 ## 3. Architecture — two planes, dispatch as a dumb pipe
 
 ```
@@ -207,6 +226,8 @@ Launcher acceptance: brings up all 8 instances; each answers a `ping` envelope (
 
 ## 10. Build risk — resolve as build step ONE (rate/token pool first, seats second, RAM last)
 
+> **RESOLVED 2026-06-17** — measured on the PC; outcome in §2.1. Fleet auth viable (N=3), Max-20x unified 5h bucket (idle ≈ free, generous headroom), 16 GB tight-but-workable. No blocker; full 7 warm panes is GO with an N=8 burn-in gate + relay utilization throttle. The pre-measurement analysis below is retained for the record.
+
 Research (2026-06-16) resolved the shape of this risk. It is **not RAM**, and it is **not primarily seats** — it is the **shared account-level rate/token pool**.
 
 ### Findings
@@ -245,6 +266,8 @@ Tracked here so the MVP's conscious simplifications don't silently become perman
 | Away-approvals (ZeeChat fallback) | Terminal-only, work blocks | First thing to relax once trust is calibrated (post exit-criterion) |
 | Multi-language hooks/gates | Python-first only | When a non-Python target appears |
 | Daily-digest notifications | None | Live-run |
+| Model auto-fallback at ≥50% pool use | Not handled (no live task) | Live-run — pin/monitor SEC/TL so a burst can't silently downgrade the adversarial check |
+| Relay utilization throttle (≤0.4 of 5h bucket) | Spec'd in §2.1; wired in launcher/relay at bring-up | Plan E (needs live pool headers) |
 
 ---
 
