@@ -31,7 +31,9 @@ Test count: **63 green** (all Mac-side logic). Readiness check: **complete** (§
 6. **Pinned environment.** Python ≥3.13, zero runtime deps. PC: `claude 2.1.181`, Max-20x OAuth, user `zeebo`. Confirm PC Python ≥3.13 before Plan E.
 
 ### Durable Mac↔PC sync channel
-**git-over-SSH** using the dedicated key already generated (`~/.ssh/pc_zee_cloud`, private key never leaves the Mac). SSH server enabled on the PC (port 22) so future syncs are a plain `git pull`. Each sync: commit on Mac → PC pulls → **verify HEAD parity**. (No GitHub creds needed on the PC; no SMB mount in the path — both were prior pain points.)
+- **Canonical backup:** private GitHub mirror `rishi-zamvar/isolated-agent-system` (Mac is authed; pushed). Single source of truth = the Mac repo → GitHub.
+- **PC channel:** **git-over-SSH** using the dedicated key (`~/.ssh/pc_zee_cloud`, private key never leaves the Mac). SSH enabled on the PC (port 22) → Mac pushes the repo to the PC over SSH, so **the PC needs no GitHub creds and no SMB mount** (both prior pain points). Future syncs: commit on Mac → push to PC/GitHub → **verify HEAD parity** on both.
+- **One-command PC verify:** `launcher/bootstrap_pc.ps1` (Phase 1 + unit parity, idempotent).
 
 ---
 
