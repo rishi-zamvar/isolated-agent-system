@@ -1,23 +1,26 @@
 #!/bin/bash
-# deploy_to_pc.sh — push this repo to a bare repo on the PC over SSH, check it
-# out into the working dir, then verify HEAD parity. Idempotent.
+# deploy_to_pc.sh — Mac is source of truth → push to GitHub → PC pulls from
+# GitHub via the read-only deploy key → verify HEAD parity. Robust on Windows
+# (no git-over-ssh server path quirks).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-PCSSH="$HERE/deploy/pcssh.sh"
-BARE='C:/ZeeCloud/Projects/isolated-agent-system.git'
-WORK='C:/ZeeCloud/Projects/isolated-agent-system'
 PC_USER="${PC_USER:-zeebo}"; PC_HOST="${PC_HOST:-100.91.236.115}"; KEY="${PC_KEY:-$HOME/.ssh/pc_zee_cloud}"
+DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/ias_deploy}"
+SSHOPT=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+PCSSH() { ssh "${SSHOPT[@]}" "${PC_USER}@${PC_HOST}" "$@"; }
 
-# 1. ensure bare repo exists on the PC
-"$PCSSH" "if (-not (Test-Path '$BARE')) { git init --bare '$BARE' }"
-# 2. push main to it from the Mac (git-over-ssh)
-git -C "$HERE" remote remove pc 2>/dev/null || true
-git -C "$HERE" remote add pc "ssh://${PC_USER}@${PC_HOST}/${BARE}"
-GIT_SSH_COMMAND="ssh -i $KEY -o StrictHostKeyChecking=accept-new" git -C "$HERE" push -f pc main
-# 3. clone/update the working tree on the PC from the bare
-"$PCSSH" "if (Test-Path '$WORK/.git') { git -C '$WORK' fetch '$BARE' main; git -C '$WORK' reset --hard FETCH_HEAD } else { git clone '$BARE' '$WORK' }"
-# 4. verify HEAD parity
-MAC=$(git -C "$HERE" rev-parse HEAD)
-PC=$("$PCSSH" "git -C '$WORK' rev-parse HEAD" | tr -d '\r\n ')
-echo "mac=$MAC pc=$PC"
-[ "$MAC" = "$PC" ] && echo "HEAD PARITY OK" || { echo "HEAD MISMATCH"; exit 1; }
+# 0. ensure the Mac is pushed to GitHub (source of truth)
+git -C "$HERE" push -q origin main
+
+# 1. ensure the read-only deploy key + pc_pull.ps1 are on the PC
+PCSSH 'powershell -NoProfile -Command "New-Item -ItemType Directory -Force \"$env:USERPROFILE\.ssh\" | Out-Null"'
+scp "${SSHOPT[@]}" "$DEPLOY_KEY" "${PC_USER}@${PC_HOST}:.ssh/ias_deploy" >/dev/null
+scp "${SSHOPT[@]}" "$HERE/deploy/pc_pull.ps1" "${PC_USER}@${PC_HOST}:pc_pull.ps1" >/dev/null
+
+# 2. PC pulls from GitHub
+PC_HEAD=$(PCSSH 'powershell -NoProfile -ExecutionPolicy Bypass -File pc_pull.ps1' | grep -oE 'PC_HEAD=[0-9a-f]+' | cut -d= -f2)
+
+# 3. HEAD parity
+MAC_HEAD=$(git -C "$HERE" rev-parse HEAD)
+echo "mac=$MAC_HEAD pc=$PC_HEAD"
+[ "${MAC_HEAD:0:12}" = "${PC_HEAD:0:12}" ] && echo "HEAD PARITY OK" || { echo "HEAD MISMATCH"; exit 1; }
