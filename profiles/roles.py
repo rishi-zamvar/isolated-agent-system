@@ -19,7 +19,7 @@ class RoleSpec:
     is_worker: bool               # False only for ORCH (gets the head block)
     perms: dict                   # settings.json permissions block
     writes_code: bool = False     # engineers get the TDD PreToolUse hook
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-opus-4-8"  # v1.1 go-live: Opus (was sonnet for MVP)
 
 
 # Worker autonomy: no per-command prompts inside the lane; deny list is the hard guardrail.

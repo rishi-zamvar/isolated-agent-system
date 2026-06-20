@@ -3,23 +3,23 @@
 **Milestone:** v1.1 (active). Roadmap: 5 phases, sequential.
 
 ## Current position
-- **Phase 1 — in progress.** SSH control plane LIVE (REQ-01 ✅). `py`-fix +
-  deploy + bootstrap parity remain.
-- Phases 2–5: pending (blocked by phase order).
+- **Phase 1 — DONE ✅** (REQ-01–04). SSH control plane live; PC deploy via git
+  bundle over scp (HEAD parity `65cbef5`); 114 tests green on PC; 8 profiles.
+- **Phase 2 — in progress.** Set Opus, launch fleet, N=8 burn-in, test 6.
+- Phases 3–5: pending.
 
-## Done this session (pre-roadmap, carries in)
-- SSH enabled on PC via GitHub-direct OpenSSH (Store-stub on `python` confirmed →
-  use `py`; pytest 9.1.1 present on PC Python 3.12.7).
-- v1.1 SSH live-implementation code artifacts already built + committed
-  (`deploy/`, `relay_listener`, `heartbeat`, `live_probes`) — 114 tests green.
+## Key facts (carry forward)
+- Deploy = `deploy/deploy_to_pc.sh` (git bundle → scp → `pc_apply.ps1` → HEAD
+  parity). NO GitHub auth / NO git-over-ssh (both failed on Windows).
+- PC: `py` (not `python`); repo at `C:\ZeeCloud\Projects\isolated-agent-system`;
+  user `zeebo`; claude 2.1.183; Python 3.12.7.
+- SSH: `ssh -i ~/.ssh/pc_zee_cloud zeebo@100.91.236.115`.
+- Drift control: every code change → commit → `deploy_to_pc.sh` → HEAD parity
+  asserted before PC execution.
 
 ## Blockers
-- None active. (SSH unblocked the topology.)
+- None active.
 
 ## Next action
-`/gsd:plan-phase 1` then execute — switch PC scripts to `py`, deploy_to_pc.sh,
-bootstrap parity.
-
-## Pending todos
-- Switch `python`→`py` in: bootstrap_pc.ps1, launch_fleet.ps1,
-  install_reactor_task.ps1, install_reactor_service.ps1 (REQ-02).
+Phase 2: set model→Opus in roles.py, regenerate+deploy, launch_fleet (N=8),
+verify test 6 (ping via wake + per-role denial).

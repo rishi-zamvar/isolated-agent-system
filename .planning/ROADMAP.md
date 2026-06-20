@@ -9,7 +9,7 @@ through the full adversarial pipeline.
 
 ## Phases
 
-- [ ] **Phase 1: SSH Deploy & Bootstrap Parity** - py-fix, git-over-SSH deploy, HEAD + test parity on the PC
+- [x] **Phase 1: SSH Deploy & Bootstrap Parity** - py-fix, git-over-SSH deploy, HEAD + test parity on the PC
 - [ ] **Phase 2: Fleet Bring-up on Opus** - 7 workers + ORCH, N=8 burn-in, test 6 (wake + denial)
 - [ ] **Phase 3: Relay & Live Harness 9/9** - relay listener, cross-machine test 3, full harness 9/9
 - [ ] **Phase 4: Durable Ops** - reactor task + NSSM service + heartbeat + reboot-survival
@@ -29,9 +29,9 @@ through the full adversarial pipeline.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Switch PC scripts python→py (bootstrap, launch_fleet, install_reactor_*) + commit/push
-- [ ] 01-02: Run deploy_to_pc.sh — git-over-SSH push + working tree + HEAD parity
-- [ ] 01-03: Run bootstrap_pc.ps1 over SSH — PC unit parity + 8 profiles
+- [x] 01-01: Switch PC scripts python→py (bootstrap, launch_fleet, install_reactor_*) + commit/push
+- [x] 01-02: Run deploy_to_pc.sh — git-over-SSH push + working tree + HEAD parity
+- [x] 01-03: Run bootstrap_pc.ps1 over SSH — PC unit parity + 8 profiles
 
 ### Phase 2: Fleet Bring-up on Opus
 **Goal**: All 8 agents run live on Opus; pings answer via the real wake path; gated actions are denied.
