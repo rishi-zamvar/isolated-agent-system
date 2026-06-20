@@ -12,9 +12,8 @@ PCSSH() { ssh "${SSHOPT[@]}" "${PC_USER}@${PC_HOST}" "$@"; }
 # 0. ensure the Mac is pushed to GitHub (source of truth)
 git -C "$HERE" push -q origin main
 
-# 1. ensure the read-only deploy key + pc_pull.ps1 are on the PC
-PCSSH 'powershell -NoProfile -Command "New-Item -ItemType Directory -Force \"$env:USERPROFILE\.ssh\" | Out-Null"'
-scp "${SSHOPT[@]}" "$DEPLOY_KEY" "${PC_USER}@${PC_HOST}:.ssh/ias_deploy" >/dev/null
+# 1. copy the read-only deploy key + pc_pull.ps1 to the PC home dir (always exists)
+scp "${SSHOPT[@]}" "$DEPLOY_KEY" "${PC_USER}@${PC_HOST}:ias_deploy" >/dev/null
 scp "${SSHOPT[@]}" "$HERE/deploy/pc_pull.ps1" "${PC_USER}@${PC_HOST}:pc_pull.ps1" >/dev/null
 
 # 2. PC pulls from GitHub

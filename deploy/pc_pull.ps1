@@ -7,7 +7,7 @@ No Windows git-server / git-over-ssh path quirks. Deploy key is read-only +
 repo-scoped. scp'd to $env:USERPROFILE\.ssh\ias_deploy before running this.
 #>
 $ErrorActionPreference = 'Stop'
-$key = "$env:USERPROFILE\.ssh\ias_deploy"
+$key = "$env:USERPROFILE\ias_deploy"
 if (-not (Test-Path $key)) { throw "deploy key missing at $key" }
 icacls $key /inheritance:r /grant:r "$($env:USERNAME):F" | Out-Null
 $env:GIT_SSH_COMMAND = "ssh -i `"$key`" -o StrictHostKeyChecking=no -o IdentitiesOnly=yes"
