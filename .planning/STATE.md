@@ -18,8 +18,19 @@
   asserted before PC execution.
 
 ## Blockers
-- None active.
+- **BLOCKER (needs user): PC claude OAuth credential EXPIRED → 401.** The fleet
+  runtime is proven (reactor fires on wake, spawns `claude -p` on Opus), but
+  `claude` returns `401 Invalid authentication credentials` — the base
+  `~/.claude/.credentials.json` (authed days ago) has lapsed. Re-auth is an
+  interactive OAuth login that can't be done headlessly over SSH. **Fix: run
+  `claude` on the PC (remote session), complete the login.** Then the fleet
+  works immediately; resume Phase 2 verification (ping→pong + denial).
 
-## Next action
-Phase 2: set model→Opus in roles.py, regenerate+deploy, launch_fleet (N=8),
-verify test 6 (ping via wake + per-role denial).
+## Verified working up to the blocker
+- Phase 1 DONE. Deploy pipeline (bundle/scp/parity) solid. Fleet of 7 worker
+  reactors launches as DETACHED scheduled tasks and PERSISTS across SSH sessions
+  (also satisfies Phase 4 persistence). Ping orch→be stored in be's inbox; the
+  be reactor saw the wake and spawned claude — only the auth failed.
+
+## Next action (after user re-auths claude on PC)
+Re-ping be → confirm pong (test 6); N=8 burn-in; then Phase 3 (relay + 9/9).
