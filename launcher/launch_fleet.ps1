@@ -22,7 +22,9 @@ param(
   [string[]] $Roles      = @("pm","tl","be","fe","plat","qa","sec"),
   [switch]   $WhatIf
 )
-$ErrorActionPreference = "Stop"
+# Continue (not Stop): schtasks writes benign stderr on cleanup of absent tasks,
+# which Stop would treat as fatal. Must-haves use explicit throws below.
+$ErrorActionPreference = "Continue"
 
 $profilesRoot = Join-Path $SystemRoot "profiles\generated"
 $logDir  = Join-Path $SystemRoot "logs"
@@ -67,11 +69,12 @@ timeout /t 5 >nul
 goto loop
 "@ | Set-Content -Path $wrapper -Encoding ascii
 
-  schtasks /End    /TN $task 2>$null | Out-Null
-  schtasks /Delete /TN $task /F 2>$null | Out-Null
-  schtasks /Create /TN $task /TR "`"$wrapper`"" /SC ONLOGON /RL LIMITED /F | Out-Null
-  schtasks /Run    /TN $task | Out-Null
-  $table += [pscustomobject]@{ role=$role; action="launched"; task=$task; log=$out }
+  cmd /c "schtasks /End /TN ""$task"" >nul 2>&1"
+  cmd /c "schtasks /Delete /TN ""$task"" /F >nul 2>&1"
+  cmd /c "schtasks /Create /TN ""$task"" /TR ""$wrapper"" /SC ONLOGON /RL LIMITED /F >nul 2>&1"
+  cmd /c "schtasks /Run /TN ""$task"" >nul 2>&1"
+  $ok = (cmd /c "schtasks /query /TN ""$task"" >nul 2>&1 && echo yes")
+  $table += [pscustomobject]@{ role=$role; action=$(if($ok){"launched"}else{"FAILED"}); task=$task; log=$out }
 }
 
 $table | Format-Table -Auto
