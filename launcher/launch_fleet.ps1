@@ -62,6 +62,7 @@ foreach ($role in $Roles) {
   $env:CLAUDE_CONFIG_DIR = $cfgDir
   $env:AGENTCTL_STORE    = $store
   $env:AGENTCTL_WAKE     = $wakeDir
+  $env:PYTHONPATH        = $SystemRoot   # so `py -m agentctl.cli` resolves for the agent
   $p = Start-Process -FilePath py -PassThru -NoNewWindow `
         -WorkingDirectory $WorkRepo `
         -RedirectStandardOutput $out -RedirectStandardError $err `

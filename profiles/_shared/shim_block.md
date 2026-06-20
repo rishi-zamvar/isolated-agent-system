@@ -3,9 +3,9 @@ No side channels, no shared scratch space, no reading another agent's files or
 memory. Every handoff is a typed shim message. The store + wake dir are set in
 your environment as `$AGENTCTL_STORE` and `$AGENTCTL_WAKE`.
 
-- Send:  `agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" send --from <you> --to <role> --type <RegistryType> --event <EVENT> [--context-ref <ref>] [--git-ref <sha>] [--correlation-id <id>] --payload '<json>'`
-- Inbox: `agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox --role <you> --unread`
-- Read:  `agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" read <envelope-id>`
+- Send:  `py -m agentctl.cli --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" send --from <you> --to <role> --type <RegistryType> --event <EVENT> [--context-ref <ref>] [--git-ref <sha>] [--correlation-id <id>] --payload '<json>'`
+- Inbox: `py -m agentctl.cli --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox --role <you> --unread`
+- Read:  `py -m agentctl.cli --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" read <envelope-id>`
 
 Rules:
 - **R2 typed-only** — a message carries exactly one artifact-registry type, and you reject a type you do not consume.

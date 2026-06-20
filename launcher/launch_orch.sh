@@ -8,6 +8,7 @@ SYSTEM_ROOT="${SYSTEM_ROOT:-$HOME/Projects/isolated-agent-system}"
 STORE_DIR="${STORE_DIR:-$HOME/.agentctl}"
 export AGENTCTL_STORE="$STORE_DIR/agentctl.db"
 export AGENTCTL_WAKE="$STORE_DIR/wake"
+export PYTHONPATH="$SYSTEM_ROOT"   # so `py -m agentctl.cli` resolves for ORCH
 CFG_DIR="$STORE_DIR/profile-orch"
 mkdir -p "$AGENTCTL_WAKE" "$CFG_DIR" "$SYSTEM_ROOT/logs"
 
