@@ -1,50 +1,95 @@
-# ROADMAP — v1.1 Live Production Deployment
+# Roadmap: Isolated-Agent Production System — v1.1 Live Production Deployment
 
-Phased execution. Each phase is independently verifiable and ends on a hard gate.
-`/gsd:plan-phase N` to detail-plan a phase before executing it.
+## Overview
 
-## Phase 1 — SSH control plane + deploy + bootstrap parity
-**Requirements:** REQ-01, REQ-02, REQ-03, REQ-04
-**Work:** Switch PC-side scripts from `python` to `py` (Store-stub fix) + commit/push;
-run `deploy_to_pc.sh` (git-over-SSH push → PC working tree → HEAD parity); run
-`bootstrap_pc.ps1` over SSH (full unit suite green on PC + 8 profiles generated).
-**Gate:** HEAD parity Mac==PC; PC unit suite green (114); 8 profiles present.
+Take the build-complete v1.0 system live on the true topology over an SSH control
+plane: deploy to the PC, bring up the 7-worker fleet on Opus, drive the harness to
+9/9, lock in durable always-on ops, and ship one real greenfield ticket end-to-end
+through the full adversarial pipeline.
 
-## Phase 2 — Fleet bring-up on Opus + N=8 burn-in
-**Requirements:** REQ-05, REQ-06, REQ-07, REQ-08
-**Work:** Set profiles/launcher to Opus; `launch_fleet.ps1` (7 workers, per-profile
-credential COPY, warm reactors); `launch_orch.sh` on the Mac; confirm all 8 alive
-(burn-in); ping each via the real wake path; confirm a per-role gated denial.
-**Gate:** 8 concurrent sessions alive; every role answers a ping via wake; a gated
-action is denied for an engineer (harness **test 6** PASS).
+## Phases
 
-## Phase 3 — Relay listener + cross-machine + harness 9/9
-**Requirements:** REQ-09, REQ-10
-**Work:** Run `relay_listener` on both nodes (poll dispatch → ingest); run the
-cross-machine probe (ORCH→worker and back over the real link); run the full
-harness live.
-**Gate:** **test 3** PASS (cross-machine round-trip); `run_harness.py --live`
-reports **9/9**.
+- [ ] **Phase 1: SSH Deploy & Bootstrap Parity** - py-fix, git-over-SSH deploy, HEAD + test parity on the PC
+- [ ] **Phase 2: Fleet Bring-up on Opus** - 7 workers + ORCH, N=8 burn-in, test 6 (wake + denial)
+- [ ] **Phase 3: Relay & Live Harness 9/9** - relay listener, cross-machine test 3, full harness 9/9
+- [ ] **Phase 4: Durable Ops** - reactor task + NSSM service + heartbeat + reboot-survival
+- [ ] **Phase 5: First Real Run** - one greenfield ticket end-to-end through the pipeline
 
-## Phase 4 — Durable ops (full)
-**Requirements:** REQ-11, REQ-12, REQ-13
-**Work:** Install the reactor as ONLOGON task + NSSM service; wire the consumer
-heartbeat into status; reboot the PC and confirm auto-resume + a nudge answered.
-**Gate:** PC answers a nudge with no interactive session; heartbeat shows
-consumer-alive; post-reboot nudge answered with no manual step.
+## Phase Details
 
-## Phase 5 — First real run (greenfield ticket)
-**Requirements:** REQ-14, REQ-15, REQ-16, REQ-17
-**Work:** Give ORCH a small free-form Python instruction; let the pipeline run
-end-to-end (Context Doc → tickets → TDD implementation → challenge gauntlet →
-SEC → ORCH gated deploy); observe via per-role logs + shim history + metrics.
-**Gate:** reviewed, tested change shipped; ≥1 genuine challenge round recorded;
-GoDecision issued only on a sha-consistent chain; §10 metrics show non-zero
-challenge activity (no rubber-stamping).
+### Phase 1: SSH Deploy & Bootstrap Parity
+**Goal**: The repo runs on the PC with HEAD + unit-test parity to the Mac, invoked via `py`.
+**Depends on**: Nothing (SSH control plane already live)
+**Requirements**: REQ-01, REQ-02, REQ-03, REQ-04
+**Success Criteria** (what must be TRUE):
+  1. All PC-side scripts invoke `py`; `py -m pytest` runs on the PC.
+  2. `git rev-parse HEAD` matches on Mac and PC (HEAD parity).
+  3. The full unit suite is green on the PC (count parity with Mac).
+  4. The 8 profiles generate on the PC with the PC's system_root.
+**Plans**: 3 plans
 
----
+Plans:
+- [ ] 01-01: Switch PC scripts python→py (bootstrap, launch_fleet, install_reactor_*) + commit/push
+- [ ] 01-02: Run deploy_to_pc.sh — git-over-SSH push + working tree + HEAD parity
+- [ ] 01-03: Run bootstrap_pc.ps1 over SSH — PC unit parity + 8 profiles
 
-**Dependencies:** strictly sequential (1→2→3→4→5); each gate must pass before the
-next phase. Phase 1 partially done (SSH live = REQ-01).
-**Out of scope (future):** multi-task throughput, the model-fallback mitigation
-(§11 deferred), polyglot hooks/gates, observability dashboard UI.
+### Phase 2: Fleet Bring-up on Opus
+**Goal**: All 8 agents run live on Opus; pings answer via the real wake path; gated actions are denied.
+**Depends on**: Phase 1
+**Requirements**: REQ-05, REQ-06, REQ-07, REQ-08
+**Success Criteria** (what must be TRUE):
+  1. 7 worker reactors + ORCH are alive simultaneously (N=8 OAuth burn-in holds).
+  2. The fleet runs on Opus (profiles/launcher set the model).
+  3. Each agent answers a ping envelope via the real fswatch/wake path.
+  4. A worker's gated action is denied by its settings.json (harness test 6 PASS).
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01: Set Opus model in roles/launcher
+- [ ] 02-02: launch_fleet.ps1 + launch_orch.sh; confirm 8 alive (burn-in)
+- [ ] 02-03: Harness test 6 — ping via wake + per-role denial
+
+### Phase 3: Relay & Live Harness 9/9
+**Goal**: Cross-machine agent messaging works over the real link; the full harness is 9/9.
+**Depends on**: Phase 2
+**Requirements**: REQ-09, REQ-10
+**Success Criteria** (what must be TRUE):
+  1. Relay listeners run on both nodes; a PC worker→Mac ORCH envelope round-trips (test 3).
+  2. `run_harness.py --live` (+ Mac-side probe) reports 9/9 PASS on the true topology.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01: Start relay listeners on both nodes
+- [ ] 03-02: Cross-machine probe — test 3
+- [ ] 03-03: Full live harness — 9/9
+
+### Phase 4: Durable Ops
+**Goal**: The PC reliably answers comms with no babysitting and survives a reboot.
+**Depends on**: Phase 3
+**Requirements**: REQ-11, REQ-12, REQ-13
+**Success Criteria** (what must be TRUE):
+  1. Reactor installed as ONLOGON task + NSSM service; PC answers a nudge with no interactive session.
+  2. Consumer heartbeat surfaced so status shows consumer-alive vs bus-alive.
+  3. After a PC reboot, the reactor (and fleet) auto-resume and a nudge is answered.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01: Install reactor ONLOGON task + NSSM service
+- [ ] 04-02: Wire consumer heartbeat into status
+- [ ] 04-03: Reboot-survival verification
+
+### Phase 5: First Real Run
+**Goal**: One real greenfield ticket is shipped end-to-end through the full adversarial pipeline.
+**Depends on**: Phase 4
+**Requirements**: REQ-14, REQ-15, REQ-16, REQ-17
+**Success Criteria** (what must be TRUE):
+  1. ORCH commits a Context Doc for a small greenfield Python instruction.
+  2. The ticket flows PM→TL→engineer (test-first) → a PR carrying its proof obligations.
+  3. The challenge gauntlet runs with reproduction; ≥1 genuine challenge round occurs.
+  4. ORCH issues a GoDecision on a sha-consistent chain; reviewed+tested change ships; §10 metrics show non-zero challenge activity.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01: ORCH intake → Context Doc for a greenfield ticket
+- [ ] 05-02: Pipeline run — tickets → TDD implementation → PR
+- [ ] 05-03: Challenge gauntlet + ORCH gated deploy
