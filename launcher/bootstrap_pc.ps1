@@ -12,12 +12,12 @@ Push-Location $SystemRoot
 try {
   Write-Host "=== git HEAD (report this for parity with Mac) ==="
   git rev-parse HEAD
-  Write-Host "=== python (need >= 3.10) ==="; python --version
+  Write-Host "=== python (need >= 3.10) ==="; py --version
   Write-Host "=== claude CLI ==="; claude --version
   Write-Host "=== unit suite (expect: 76 passed) ==="
-  python -m pytest -q
+  py -m pytest -q
   Write-Host "=== generate the 8 profiles with PC root ==="
-  python -m profiles.generate "$SystemRoot\profiles\generated" $SystemRoot
+  py -m profiles.generate "$SystemRoot\profiles\generated" $SystemRoot
   Write-Host "=== profiles produced ==="
   Get-ChildItem "$SystemRoot\profiles\generated" -Directory | Select-Object -Expand Name
   Write-Host ""

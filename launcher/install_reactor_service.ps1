@@ -15,7 +15,7 @@ param(
   [string]$WakeDir    = "$env:USERPROFILE\.dispatch\wake-touches",
   [string]$Service    = "DispatchReactor",
   [string]$Nssm       = "nssm",
-  [string]$Python     = "python"
+  [string]$Python     = "py"
 )
 $ErrorActionPreference = "Stop"
 $logDir = Join-Path $SystemRoot "logs"

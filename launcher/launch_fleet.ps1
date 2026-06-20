@@ -29,7 +29,7 @@ $reactor = Join-Path $SystemRoot "launcher\agent_reactor.py"
 
 # 0. (re)generate profiles with THIS machine's root so the TDD-hook path is correct
 Push-Location $SystemRoot
-python -m profiles.generate $profilesRoot $SystemRoot | Write-Host
+py -m profiles.generate $profilesRoot $SystemRoot | Write-Host
 Pop-Location
 
 New-Item -ItemType Directory -Force -Path $logDir,$wakeDir,(Split-Path $store),$WorkRepo | Out-Null
@@ -62,7 +62,7 @@ foreach ($role in $Roles) {
   $env:CLAUDE_CONFIG_DIR = $cfgDir
   $env:AGENTCTL_STORE    = $store
   $env:AGENTCTL_WAKE     = $wakeDir
-  $p = Start-Process -FilePath python -PassThru -NoNewWindow `
+  $p = Start-Process -FilePath py -PassThru -NoNewWindow `
         -WorkingDirectory $WorkRepo `
         -RedirectStandardOutput $out -RedirectStandardError $err `
         -ArgumentList @($reactor, $role, $wakeDir)

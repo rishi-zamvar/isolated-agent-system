@@ -15,7 +15,7 @@ param(
   [string]$SystemRoot = "C:\ZeeCloud\Projects\isolated-agent-system",
   [string]$WakeDir    = "$env:USERPROFILE\.dispatch\wake-touches",
   [string]$TaskName   = "DispatchReactor",
-  [string]$Python     = "python"
+  [string]$Python     = "py"
 )
 $ErrorActionPreference = "Stop"
 $logDir = Join-Path $SystemRoot "logs"
