@@ -11,11 +11,14 @@ Cross-platform (Python). Launched one-per-worker by launch_fleet.ps1 on the PC,
 and for ORCH by launch_orch.sh on the Mac.
 """
 
+import json
+import os
 import subprocess
 import time
 from pathlib import Path
 
 from agentctl import heartbeat
+from profiles.model_presets import model_for
 
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
@@ -36,8 +39,57 @@ def pending_wakes(wake_dir, role: str, seen: set[str]) -> list[str]:
 
 
 def claude_cmd(role: str) -> list[str]:
-    """The headless, context-warm invocation that processes this role's inbox."""
-    return ["claude", "-p", "--continue", WAKE_PROMPT.format(role=role)]
+    """The headless, context-warm invocation that processes this role's inbox.
+
+    Passes --model EXPLICITLY from the active preset — `claude -p` does NOT honor
+    the per-profile settings.json model, so without this every agent silently runs
+    the account-default (Opus) and the cost tiering never takes effect.
+    --output-format json so we can read back token usage + cost + tool activity."""
+    model = model_for(role, os.environ.get("FLEET_PRESET", "standard"))
+    return ["claude", "-p", "--continue", "--model", model, "--output-format", "json",
+            WAKE_PROMPT.format(role=role)]
+
+
+def make_runner(role: str, token_log: Path, status_dir: Path):
+    """Default runner: run claude (capturing JSON), record per-run token usage +
+    cost + whether it changed code, and beacon live status (for the monitor)."""
+    busy = status_dir / f"{role}.status"
+
+    def run(cmd):
+        try:
+            busy.write_text("processing")           # live beacon: claude running
+        except OSError:
+            pass
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        edited = False
+        try:
+            d = json.loads(r.stdout or "{}")
+            u = d.get("usage") or {}
+            # "made edits" = the run used a file-mutating tool
+            text = json.dumps(d)
+            edited = ('"Edit"' in text or '"Write"' in text or '"NotebookEdit"' in text
+                      or '"MultiEdit"' in text)
+            rec = {"role": role,
+                   "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
+                   "in": (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0),
+                   "out": u.get("output_tokens") or 0,
+                   "cost": d.get("total_cost_usd"), "edited": edited, "ts": time.time()}
+            try:
+                with open(token_log, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(rec) + "\n")
+            except OSError:
+                pass
+            print(d.get("result", ""), flush=True)   # keep logs human-readable
+        except Exception:
+            print(r.stdout or "", flush=True)
+            if r.stderr:
+                print(r.stderr, flush=True)
+        try:
+            busy.write_text("edited" if edited else "processed")
+        except OSError:
+            pass
+        return r
+    return run
 
 
 def drive_once(role: str, runner) -> None:
@@ -57,8 +109,11 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
     `runner` defaults to subprocess.run; `max_iters` bounds the loop for tests
     (None = run forever). Emits a liveness heartbeat every iteration (even while
     idle) so observers can distinguish 'reactor alive' from 'bus alive'."""
+    status_dir = Path(wake_dir).parent / "heartbeats"
+    token_log = Path(wake_dir).parent / "token_usage.jsonl"
+    status_dir.mkdir(parents=True, exist_ok=True)
     if runner is None:
-        runner = lambda cmd: subprocess.run(cmd, check=False)
+        runner = make_runner(role, token_log, status_dir)
     hb = heartbeat_path(wake_dir, role)
     hb.parent.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
