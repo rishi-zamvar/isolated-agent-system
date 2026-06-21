@@ -61,6 +61,18 @@ def per_agent(verdicts: list[dict], roles) -> dict[str, dict]:
     }
 
 
+def fleet_metrics(verdicts: list[dict]) -> dict:
+    """Fleet-wide challenge_rate and accept_with_verification across all roles."""
+    total = len(verdicts)
+    chal = sum(1 for v in verdicts if v["kind"] == CHALLENGE) / total if total else 0.0
+    accepts = [v for v in verdicts if v["kind"] == ACCEPT]
+    awv = sum(1 for v in accepts if v["verified"]) / len(accepts) if accepts else 0.0
+    return {
+        "challenge_rate": round(chal, 3),
+        "accept_with_verification": round(awv, 3),
+    }
+
+
 def from_store(store_path, roles) -> dict[str, dict]:
     con = sqlite3.connect(Path(store_path))
     con.row_factory = sqlite3.Row

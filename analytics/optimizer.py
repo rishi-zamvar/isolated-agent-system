@@ -52,6 +52,27 @@ def to_remediation_payload(findings: list[dict]) -> dict:
     }
 
 
+def open_count(repo_path: str | None, ceiling: int = _CC_CEILING) -> int:
+    """Count of functions currently exceeding the CC ceiling across all .py files.
+
+    O(n) in total functions — each file scanned once. Returns 0 when repo is
+    absent or empty.
+    """
+    if not repo_path:
+        return 0
+    root = Path(repo_path)
+    if not root.exists():
+        return 0
+    total = 0
+    for path in root.rglob("*.py"):
+        try:
+            source = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        total += len(cc_gate(source, ceiling))
+    return total
+
+
 def on_merge(repo_path: str, changed_files: list[str], ceiling: int = _CC_CEILING) -> list[dict]:
     """Event handler: scan each changed .py file, return all findings.
 

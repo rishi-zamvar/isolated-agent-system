@@ -16,7 +16,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from analytics import bloat, economy, flow, ijw
+from analytics import bloat, economy, flow, ijw, optimizer as _opt
+from librarian import cabinet as _cabinet
+from metrics import compute as _compute
 
 _CMP = {
     "<":  _op.lt,
@@ -115,20 +117,22 @@ def _load_bus_rows(store_path) -> list[dict]:
     con.row_factory = sqlite3.Row
     try:
         rows = []
-        for r in con.execute("SELECT type, from_role, to_role, payload, ts FROM envelopes"):
+        for r in con.execute(
+                "SELECT type, from_role, to_role, payload, created_at FROM envelopes"):
             try:
                 payload = json.loads(r["payload"] or "{}")
             except json.JSONDecodeError:
                 payload = {}
             rows.append({"type": r["type"], "from_role": r["from_role"],
                          "to_role": r["to_role"], "payload": payload,
-                         "ts": r["ts"]})
+                         "created_at": r["created_at"]})
         return rows
     finally:
         con.close()
 
 
-def build_snapshot(token_log_path, store_path, repo_path=None) -> dict:
+def build_snapshot(token_log_path, store_path, repo_path=None,
+                   cabinet_path=None) -> dict:
     """Load all data sources once; return the snapshot dict for resolve_entry.
 
     Each analytics rollup is called exactly once — O(n) per source, not per metric.
@@ -140,20 +144,38 @@ def build_snapshot(token_log_path, store_path, repo_path=None) -> dict:
     econ = economy.economy(recs)
     flw = flow.flow(rows)
     blt = bloat.bloat(commits)
+    verdicts = _compute.verdicts_from_rows(rows)
 
-    return {
+    snap: dict = {
         "economy": econ,
         "flow": flw,
         "bloat": blt,
         "ijw": ijw.ijw(econ, flw, blt, rows),
+        "optimizer": {"open_count": _opt.open_count(repo_path)},
+        "quality": _compute.fleet_metrics(verdicts),
+        "librarian": None,
     }
 
+    if cabinet_path is not None:
+        cab = Path(cabinet_path)
+        comp = _cabinet.stats(cab)
+        sel = _cabinet.selection_stats(cab)
+        rec = _cabinet.recall_stats(cab)
+        snap["librarian"] = {
+            "compaction": {"tokens_saved": comp["saved"]},
+            "selections": {"snipped_pct": sel["snip_pct"]},
+            "recall": {"count": rec["recalls"]},
+        }
 
-def serve_registry(catalog_path, token_log_path, store_path, repo_path=None) -> dict:
+    return snap
+
+
+def serve_registry(catalog_path, token_log_path, store_path, repo_path=None,
+                   cabinet_path=None) -> dict:
     """Top-level: load catalog, build snapshot once, return /api/registry response."""
     catalog = json.loads(Path(catalog_path).read_text(encoding="utf-8"))
     if isinstance(catalog, dict):
         catalog = catalog.get("entries", [catalog])
-    snapshot = build_snapshot(token_log_path, store_path, repo_path)
+    snapshot = build_snapshot(token_log_path, store_path, repo_path, cabinet_path)
     generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     return build_response(catalog, snapshot, generated_at)
