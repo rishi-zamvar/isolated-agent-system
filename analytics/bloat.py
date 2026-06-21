@@ -56,16 +56,23 @@ def dep_growth(commits: list[dict]) -> int:
     return sum(f["add"] for c in commits for f in c["files"] if _is_dep(f["path"]))
 
 
+_SIZE_CEILING = 2000  # lines of churn at which size_factor reaches zero
+
+
 def zero_bloat_score(commits: list[dict]) -> int:
     """0-100, higher = leaner. Blend of: code permanence (net/churn), low thrash,
-    healthy test ratio. Returns 0 with no data."""
+    healthy test ratio, zero dependency growth, and compact diff size.
+    Returns 0 with no data."""
     nc = net_and_churn(commits)
     if nc["churn"] == 0:
         return 0
     permanence = max(0.0, nc["net"] / nc["churn"])          # 1 = nothing rewritten away
     leanness = 1.0 - thrash(commits)["frac"]                 # 1 = no file rewritten
     tests = min(1.0, test_ratio(commits) / 0.5)             # target ~0.5 test:code
-    score = 100 * (0.45 * permanence + 0.35 * leanness + 0.20 * tests)
+    dep_factor = max(0.0, 1.0 - dep_growth(commits) / nc["churn"])  # 0 when all churn is deps
+    size_factor = max(0.0, 1.0 - nc["churn"] / _SIZE_CEILING)       # 0 when diff balloons
+    score = 100 * (0.35 * permanence + 0.30 * leanness + 0.15 * tests
+                   + 0.10 * dep_factor + 0.10 * size_factor)
     return max(0, min(100, round(score)))
 
 

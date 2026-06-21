@@ -35,10 +35,15 @@ def test_orch_denies_code_workers_get_verification_block(tmp_path):
 
 def test_engineers_get_tdd_hook_others_do_not(tmp_path):
     generate.generate_all(tmp_path, "/sys")
-    be = json.loads((tmp_path / "be" / "settings.json").read_text())
-    assert "hooks" in be and "PreToolUse" in be["hooks"]
-    pm = json.loads((tmp_path / "pm" / "settings.json").read_text())
-    assert "hooks" not in pm  # PM does not write code
+    # all code-writing roles must have the PreToolUse tdd_guard hook
+    for role in ("be", "fe", "plat", "tl", "sec"):
+        st = json.loads((tmp_path / role / "settings.json").read_text())
+        assert "hooks" in st and "PreToolUse" in st["hooks"], \
+            f"{role} missing PreToolUse tdd_guard hook"
+    # non-code-writing roles must NOT have the hook
+    for role in ("pm", "qa", "orch"):
+        st = json.loads((tmp_path / role / "settings.json").read_text())
+        assert "hooks" not in st, f"{role} should not have hooks"
 
 
 def test_worker_autonomy_and_denylist(tmp_path):
