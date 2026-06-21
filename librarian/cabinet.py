@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS selections (
 
 CREATE TABLE IF NOT EXISTS recalls (
     seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    role       TEXT,                 -- which agent searched the archive
     query      TEXT NOT NULL,
     hits       INTEGER NOT NULL,
     top_score  REAL,
@@ -80,6 +81,10 @@ def init(path: Path) -> None:
         for col in ("durability", "embedding"):
             if col not in cols:
                 con.execute(f"ALTER TABLE facts ADD COLUMN {col} TEXT")
+        # migrate: attribute recalls to the requesting agent
+        rcols = {r["name"] for r in con.execute("PRAGMA table_info(recalls)")}
+        if "role" not in rcols:
+            con.execute("ALTER TABLE recalls ADD COLUMN role TEXT")
         con.commit()
     finally:
         con.close()
@@ -272,13 +277,16 @@ def library_stats(path: Path) -> dict:
     return s
 
 
-def record_recall(path: Path, query: str, hits: int, top_score: float | None) -> None:
-    """Log a recall so we can measure how often the archive is consulted + hit quality."""
+def record_recall(path: Path, query: str, hits: int, top_score: float | None,
+                  role: str | None = None) -> None:
+    """Log a recall (attributed to the requesting agent) so we can measure how often
+    the archive is consulted, by whom, and how good the hits were. A recall is a 'miss'
+    of the working set — high recall for an agent = its context was over-snipped."""
     init(path)
     con = _connect(path)
     try:
-        con.execute("INSERT INTO recalls (query, hits, top_score, created_at) "
-                    "VALUES (?, ?, ?, ?)", (query, hits, top_score, _now_iso()))
+        con.execute("INSERT INTO recalls (role, query, hits, top_score, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)", (role, query, hits, top_score, _now_iso()))
         con.commit()
     finally:
         con.close()
@@ -288,14 +296,47 @@ def recall_stats(path: Path) -> dict:
     init(path)
     con = _connect(path)
     try:
-        rows = list(con.execute("SELECT query, hits, top_score, created_at "
+        rows = list(con.execute("SELECT role, query, hits, top_score, created_at "
                                 "FROM recalls ORDER BY seq DESC"))
     finally:
         con.close()
     scores = [r["top_score"] for r in rows if r["top_score"] is not None]
+    by_role: dict[str, int] = {}
+    for r in rows:
+        by_role[r["role"] or "?"] = by_role.get(r["role"] or "?", 0) + 1
     return {"recalls": len(rows),
             "avg_top": round(sum(scores) / len(scores), 3) if scores else 0,
+            "by_role": by_role,
             "recent": [dict(r) for r in rows[:10]]}
+
+
+def relevance_efficiency(path: Path) -> dict:
+    """The Librarian's 'ideal run mode' signal: maximize context REMOVED while minimizing
+    RECALLS. A recall = the gating snipped something the agent then needed back, so
+    fewer recalls per unit removed = better relevance. precision = share of snipped spans
+    never pulled back. The goal is high removed_tokens + high precision (low recall)."""
+    init(path)
+    con = _connect(path)
+    try:
+        removed_spans = con.execute(
+            "SELECT COUNT(*) c FROM facts WHERE kind = 'snip'").fetchone()["c"]
+        recalls = con.execute("SELECT COUNT(*) c FROM recalls").fetchone()["c"]
+        comp = con.execute(
+            "SELECT COUNT(*) c FROM compactions WHERE after_in IS NOT NULL").fetchone()["c"]
+        removed_tokens = con.execute(
+            "SELECT COALESCE(SUM(before_in - after_in), 0) s FROM compactions "
+            "WHERE after_in IS NOT NULL").fetchone()["s"] or 0
+        by_role = {r["role"] or "?": r["c"]
+                   for r in con.execute("SELECT role, COUNT(*) c FROM recalls GROUP BY role")}
+    finally:
+        con.close()
+    precision = max(0.0, round(1 - recalls / removed_spans, 3)) if removed_spans else 1.0
+    return {"removed_spans": removed_spans, "removed_tokens": removed_tokens,
+            "recalls": recalls, "compactions": comp,
+            "recalls_per_compaction": round(recalls / comp, 2) if comp else 0,
+            "precision": precision,                       # 1.0 = nothing ever needed back
+            "recalls_by_role": by_role,
+            "ideal": precision >= 0.9 and removed_tokens > 0}  # aggressive removal, low miss
 
 
 def record_selection(path: Path, role: str, structural: int, relevant: int,

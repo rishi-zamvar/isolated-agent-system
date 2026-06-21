@@ -22,12 +22,22 @@ def _default_cabinet() -> Path:
 
 
 def _cmd_recall(args) -> int:
-    hits = cabinet.recall(args.cabinet, args.query, role=args.role, limit=args.limit)
+    # semantic recall (embed the query, cosine-rank) so agents get the RELEVANT span
+    # even when the wording differs; fall back to substring if embeddings are absent.
+    try:
+        from librarian import embed
+        vec = embed.get_embedder().encode_one(args.query)
+        hits = cabinet.recall_semantic(args.cabinet, vec, role=None, limit=args.limit)
+    except Exception:
+        hits = cabinet.recall(args.cabinet, args.query, role=args.role, limit=args.limit)
+    top = hits[0].get("score") if hits else None
+    cabinet.record_recall(args.cabinet, args.query, len(hits), top, role=args.role)
     if not hits:
         print(f"(no cabinet matches for {args.query!r})")
         return 0
     for r in hits:
-        print(f"--- #{r['seq']} {r['role']} [{r['kind']}/{r['topic']}] {r['created_at']} ---")
+        sc = f" cos={r['score']:.2f}" if r.get("score") is not None else ""
+        print(f"--- #{r['seq']} {r['role']} [{r['kind']}/{r['topic']}]{sc} {r['created_at']} ---")
         print(r["body"])
         print()
     return 0

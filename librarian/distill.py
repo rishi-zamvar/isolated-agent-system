@@ -45,7 +45,13 @@ def semantic_brief(role: str, structural: list[dict], relevant: list[dict],
 
 You are resuming on a Librarian-curated working set selected by on-device relevance.
 Architecture is pinned below; only the past work related to your current task was kept.
-Unrelated/settled work was filed to the cabinet — ask ORCH to `recall` it if needed.
+Older/settled work was filed to the searchable cabinet. **If you are missing context you
+need, do NOT guess — search the archive directly:**
+
+    python -m librarian.cli recall --role {role} "<what you need, in plain words>"
+
+It semantically searches everything ever filed and returns the most relevant spans. Use it
+whenever the brief lacks a detail (a past decision, an API, prior logic).
 {ctx}
 ## Codebase & architecture (always retained)
 {chr(10).join(s_lines)}
