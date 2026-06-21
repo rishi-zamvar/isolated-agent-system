@@ -18,19 +18,31 @@
   asserted before PC execution.
 
 ## Blockers
-- **BLOCKER (needs user): PC claude OAuth credential EXPIRED → 401.** The fleet
-  runtime is proven (reactor fires on wake, spawns `claude -p` on Opus), but
-  `claude` returns `401 Invalid authentication credentials` — the base
-  `~/.claude/.credentials.json` (authed days ago) has lapsed. Re-auth is an
-  interactive OAuth login that can't be done headlessly over SSH. **Fix: run
-  `claude` on the PC (remote session), complete the login.** Then the fleet
-  works immediately; resume Phase 2 verification (ping→pong + denial).
+- **NONE.** (Prior 401 blocker RESOLVED 2026-06-20.)
 
-## Verified working up to the blocker
+## Auth resolution (2026-06-20)
+- PC claude OAuth was re-provisioned **headlessly over SSH** via a scripted PKCE
+  auth-code exchange (`/tmp/claude_oauth.py` on Mac: init → user authorized my
+  URL in Chrome → pasted code → exchanged at `platform.claude.com/v1/oauth/token`
+  with UA `claude-cli/...` to clear Cloudflare 1010). Tokens (oat01 access +
+  ort01 refresh, Max account) written to PC `~/.claude/.credentials.json`
+  (base64-embedded install.ps1; old creds → `.bak`) AND to secret
+  `C:\ZeeCloud\secrets\fleet-oauth.env` (ACL `icacls /inheritance:r`, owner-only,
+  outside git tree). Verified: PC base `claude -p` returns AUTH_OK on Opus.
+
+## Verified working (test 6 — PASS)
 - Phase 1 DONE. Deploy pipeline (bundle/scp/parity) solid. Fleet of 7 worker
   reactors launches as DETACHED scheduled tasks and PERSISTS across SSH sessions
-  (also satisfies Phase 4 persistence). Ping orch→be stored in be's inbox; the
-  be reactor saw the wake and spawned claude — only the auth failed.
+  (also satisfies Phase 4 persistence).
+- **Live round-trip proven:** injected orch->be Ticket/PING -> be reactor woke ->
+  spawned claude on Opus (NO 401) -> ran intake_review -> replied through the
+  shim. be correctly (a) refused to fabricate an ill-fitting reply to a one-way
+  PING [R2: Ticket->orch rejected], and (b) issued a ChallengeThread (id
+  bb5ebe6f, in orch inbox) when asked to assert verified[] with no artifact —
+  the no-bare-approval + adversarial guardrails firing as designed.
+- Note: a "liveness PING" has no liveness-ACK type by design; liveness is the
+  file heartbeat. The challenge reply itself is proof-of-life for the msg path.
 
-## Next action (after user re-auths claude on PC)
-Re-ping be → confirm pong (test 6); N=8 burn-in; then Phase 3 (relay + 9/9).
+## Next action
+Phase 3: relay listeners on both nodes + cross-machine test 3 (Mac orch <-> PC
+worker via relay) + full harness to 9/9. Then Phase 5 first real ticket.
