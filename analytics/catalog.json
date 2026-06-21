@@ -349,11 +349,6 @@
     "definition": "Per-agent recall counts: how many recalls each agent role triggered during this session.",
     "so_what": "Surfaces which agents are driving recalls. An agent with disproportionately high recall count indicates its working context is being over-snipped — the Librarian may be misclassifying that agent's relevant content as removable.",
     "display": "bar",
-    "insight": {
-      "warn_if": "> 0",
-      "good_if": "== 0",
-      "warn_msg": "One or more agent roles triggered recalls — check per-role breakdown for outliers"
-    },
     "source": "librarian.recall_stats.by_role"
   },
   {
