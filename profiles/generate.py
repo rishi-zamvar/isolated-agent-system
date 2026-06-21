@@ -20,12 +20,20 @@ def _block(name: str) -> str:
     return (_SHARED / name).read_text(encoding="utf-8").rstrip()
 
 
+def _norms() -> str:
+    """The engineering-norms bulletin board, embedded into every profile so all
+    agents honor it (asymptotic-complexity bar, event-driven>polling, etc.)."""
+    p = Path(__file__).parent.parent / ".planning" / "NORMS.md"
+    return p.read_text(encoding="utf-8").rstrip() if p.exists() else ""
+
+
 def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
     head = _block("orch_block.md") if not spec.is_worker else _block("worker_block.md")
     shim = _block("shim_block.md")
     fns = "\n".join(f"- `fn {f}`" for f in spec.functions)
     dens = "\n".join(f"- {d}" for d in spec.denials)
     sup = spec.supervisor or "the human"
+    norms = _norms()
     return f"""# {spec.title}
 
 **Agent id:** `{role_id}`  ·  **Supervisor:** {sup}
@@ -33,6 +41,8 @@ def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
 {head}
 
 {shim}
+
+{norms}
 
 ## Your mandate
 {spec.mandate}
