@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "analytics/catalog_schema.json",
+  "title": "Metrics Catalog entry — the FE/BE contract (TL-owned, locked)",
+  "description": "One self-describing metric. PM authors entries to this schema; BE serves them with live values at /api/registry; FE renders them generically. The schema IS the contract — FE and BE cannot drift.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "category", "label", "unit", "definition", "so_what", "display", "source"],
+  "properties": {
+    "key":        { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Stable unique id, snake_case." },
+    "category":   { "type": "string", "minLength": 1, "description": "Groups metrics into one card on the dashboard." },
+    "label":      { "type": "string", "minLength": 1, "description": "Short human label shown on the tile." },
+    "unit":       { "enum": ["percent", "usd", "tokens", "count", "ratio", "ms"] },
+    "definition": { "type": "string", "minLength": 1, "description": "Plain-language: what this number is." },
+    "so_what":    { "type": "string", "minLength": 1, "description": "Why a human should care — the consequence." },
+    "display":    { "enum": ["kpi", "bar", "donut", "gauge", "list"] },
+    "insight": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional thresholds. Expressions are a comparator + numeric literal in the metric's unit, e.g. '< 0.25', '> 0.6'.",
+      "properties": {
+        "warn_if":  { "type": "string", "pattern": "^(<|<=|>|>=|==|!=)\\s*-?[0-9]+(\\.[0-9]+)?$" },
+        "good_if":  { "type": "string", "pattern": "^(<|<=|>|>=|==|!=)\\s*-?[0-9]+(\\.[0-9]+)?$" },
+        "warn_msg": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": { "type": "string", "minLength": 1, "description": "Dotted resolver path BE binds to a live value, e.g. 'economy.cache_hit'. Must resolve in the registry engine." }
+  }
+}
