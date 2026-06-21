@@ -64,7 +64,7 @@ ROLES: dict[str, RoleSpec] = {
             "define_acceptance(t: Ticket) -> AcceptanceCriteria [to QA]  (post: every criterion is binary pass/fail)",
             "accept_delivery(feature, ac: AcceptanceCriteria, tr: TestReport [from QA]) -> accepted | reopened",
             ("surface_optimizations(metrics [curl http://100.91.236.115:8802/api/registry + /api/pulse], "
-             "bus, token_usage.jsonl) -> [Ticket event=OPTIMIZATION] [to orch]  "
+             "bus, token_usage.jsonl) -> [Ticket event=OPTIMIZATION] [to tl]  "
              "(each insight cycle: pick the single highest-leverage ROOT-CAUSE inefficiency behind a "
              "warn signal — the cause, NOT the symptom — and raise payload "
              "{problem, root_cause, proposed_direction, expected_impact, effort}. Reason STRUCTURALLY: "
