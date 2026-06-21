@@ -120,11 +120,17 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
             text = json.dumps(d)
             edited = ('"Edit"' in text or '"Write"' in text or '"NotebookEdit"' in text
                       or '"MultiEdit"' in text)
+            in_fresh = u.get("input_tokens") or 0
+            in_cache = u.get("cache_read_input_tokens") or 0
             rec = {"role": role,
                    "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
-                   "in": (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0),
+                   "in": in_fresh + in_cache,            # carried context (back-compat)
+                   "in_fresh": in_fresh,                  # uncached input — the expensive tokens
+                   "in_cache": in_cache,                  # cache reads — cheap (~0.1x)
+                   "in_cache_create": u.get("cache_creation_input_tokens") or 0,
                    "out": u.get("output_tokens") or 0,
                    "cost": d.get("total_cost_usd"), "edited": edited,
+                   "dur_ms": d.get("duration_ms"), "turns": d.get("num_turns"),
                    "compacted": compacted, "session_id": sid, "ts": time.time()}
             try:
                 with open(token_log, "a", encoding="utf-8") as f:
