@@ -155,5 +155,5 @@ def serve_registry(catalog_path, token_log_path, store_path, repo_path=None) -> 
     if isinstance(catalog, dict):
         catalog = catalog.get("entries", [catalog])
     snapshot = build_snapshot(token_log_path, store_path, repo_path)
-    generated_at = datetime.datetime.utcnow().isoformat() + "Z"
+    generated_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     return build_response(catalog, snapshot, generated_at)

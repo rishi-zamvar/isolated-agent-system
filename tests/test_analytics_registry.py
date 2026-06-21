@@ -152,7 +152,7 @@ def _snap():
 
 
 def test_build_response_has_generated_at():
-    ts = datetime.datetime.utcnow().isoformat()
+    ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
     r = reg.build_response(_catalog(), _snap(), ts)
     assert r["generated_at"] == ts
 
