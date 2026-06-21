@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from agentctl import store
-from librarian import cabinet, distill
+from librarian import cabinet, distill, relevance
 
 # Input tokens (input + cache_read) that flag a bloated, compaction-worthy context.
 # Tuned from live data: a freshly-compacted but actively-working run lands ~200-250k
@@ -76,10 +76,48 @@ def _atomic_write(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+def _span_text(e) -> str:
+    """Embeddable text for a bus envelope: the routing + any string payload values."""
+    base = distill.summarize_envelope(e)
+    try:
+        p = json.loads(e["payload"]) if e["payload"] else {}
+        extra = " ".join(str(v) for v in p.values() if isinstance(v, str))[:240]
+    except Exception:
+        extra = ""
+    return f"{base} {extra}".strip()
+
+
+def _semantic_brief(role, store_path, cabinet_path, embedder, context_ref,
+                    k: int = 8, theta: float = 0.25, scope_n: int = 6) -> tuple[str, dict]:
+    """Build a relevance-gated brief: pin structural spans, keep episodic spans most
+    similar to the agent's current scope, file the rest to the cabinet for recall."""
+    envs = store.activity(store_path, role, limit=40)
+    spans = [{"text": _span_text(e), "type": e["type"]} for e in envs]
+    for s, v in zip(spans, embedder.encode([s["text"] for s in spans])):
+        s["vec"] = v
+    # scope = centroid of the most recent (active) messages — "what we're on now"
+    scope = relevance.mean_vector([s["vec"] for s in spans[:scope_n]])
+    kept, snipped = relevance.select(spans, scope, k=k, theta=theta)
+    structural = [s for s in kept if s.get("keep") == "structural"]
+    relevant = [s for s in kept if s.get("keep") == "relevant"]
+    # archive the snipped spans WITH embeddings so they're recallable later
+    for s in snipped:
+        cabinet.file_fact(cabinet_path, role, s["text"], topic="compaction",
+                          kind="snip", durability="episodic", embedding=s["vec"])
+    cabinet.record_selection(cabinet_path, role, len(structural), len(relevant),
+                             len(snipped), backend=embedder.backend)
+    brief = distill.semantic_brief(role, structural, relevant, context_ref)
+    return brief, {"structural": len(structural), "relevant": len(relevant),
+                   "snipped": len(snipped)}
+
+
 def run_once(store_path, cabinet_path, token_log, briefs_dir, now: float,
-             threshold: int = THRESHOLD_IN, context_ref: str | None = None) -> dict:
+             threshold: int = THRESHOLD_IN, context_ref: str | None = None,
+             embedder=None) -> dict:
     """One pass: schedule compactions for bloated roles, then close any whose
-    post-compaction run has landed. Returns {opened, closed}."""
+    post-compaction run has landed. With an `embedder`, briefs are relevance-gated
+    (semantic working set); without one, the deterministic digest brief is used.
+    Returns {opened, closed}."""
     cabinet.init(cabinet_path)
     briefs = Path(briefs_dir)
     briefs.mkdir(parents=True, exist_ok=True)
@@ -96,12 +134,16 @@ def run_once(store_path, cabinet_path, token_log, briefs_dir, now: float,
             continue
         before_in = rec.get("in") or 0              # from the SAME snapshot (P2-1)
         trigger_ts = rec.get("ts") or now
-        envs = store.activity(store_path, role, limit=distill._MAX_ACTIVITY)
-        facts = cabinet.facts_for(cabinet_path, role)
-        _atomic_write(brief_file,
-                      distill.build_brief(role, envs, facts, context_ref))
-        cabinet.file_fact(cabinet_path, role, distill.activity_digest(role, envs),
-                          topic="compaction", kind="snip")
+        if embedder is not None:
+            brief, _ = _semantic_brief(role, store_path, cabinet_path, embedder,
+                                       context_ref)
+        else:
+            envs = store.activity(store_path, role, limit=distill._MAX_ACTIVITY)
+            facts = cabinet.facts_for(cabinet_path, role)
+            brief = distill.build_brief(role, envs, facts, context_ref)
+            cabinet.file_fact(cabinet_path, role, distill.activity_digest(role, envs),
+                              topic="compaction", kind="snip")
+        _atomic_write(brief_file, brief)
         cabinet.open_compaction(cabinet_path, role, before_in, now, trigger_ts)
         opened.append(role)
 
@@ -141,12 +183,13 @@ def close_after_runs(cabinet_path, token_log) -> list[str]:
 
 
 def loop(store_path, cabinet_path, token_log, briefs_dir, poll: float = 30.0,
-         threshold: int = THRESHOLD_IN, max_iters: int | None = None) -> None:
+         threshold: int = THRESHOLD_IN, max_iters: int | None = None,
+         embedder=None) -> None:
     i = 0
     while max_iters is None or i < max_iters:
         try:
             out = run_once(store_path, cabinet_path, token_log, briefs_dir,
-                           now=time.time(), threshold=threshold)
+                           now=time.time(), threshold=threshold, embedder=embedder)
             if out["opened"] or out["closed"]:
                 print(f"[librarian] opened={out['opened']} closed={out['closed']}",
                       flush=True)
@@ -159,6 +202,12 @@ def loop(store_path, cabinet_path, token_log, briefs_dir, poll: float = 30.0,
 if __name__ == "__main__":
     base = Path(os.environ.get("AGENTCTL_WAKE", "."))
     parent = base.parent
+    embedder = None
+    if os.environ.get("LIBRARIAN_SEMANTIC", "1") != "0":  # on by default
+        from librarian import embed
+        embedder = embed.get_embedder()
+        print(f"[librarian] semantic working-set ON (backend={embedder.backend})",
+              flush=True)
     loop(
         store_path=os.environ.get("AGENTCTL_STORE", str(parent / "agentctl.db")),
         cabinet_path=os.environ.get("LIBRARIAN_CABINET", str(parent / "cabinet.db")),
@@ -166,4 +215,5 @@ if __name__ == "__main__":
         briefs_dir=os.environ.get("LIBRARIAN_BRIEFS", str(parent / "briefs")),
         poll=float(os.environ.get("LIBRARIAN_POLL", "30")),
         threshold=int(os.environ.get("LIBRARIAN_THRESHOLD", str(THRESHOLD_IN))),
+        embedder=embedder,
     )

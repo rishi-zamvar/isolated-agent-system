@@ -30,6 +30,33 @@ def activity_digest(role: str, envelopes, limit: int = _MAX_ACTIVITY) -> str:
         f"- {ln}" for ln in lines)
 
 
+def semantic_brief(role: str, structural: list[dict], relevant: list[dict],
+                   context_ref: str | None = None) -> str:
+    """Carry-forward brief assembled from a relevance-gated working set.
+
+    `structural` = architecture/contract knowledge pinned in unconditionally.
+    `relevant`   = episodic spans kept because they're cosine-similar to current scope
+                   (each carries a `score`). Everything else was filed to the cabinet."""
+    s_lines = [f"- {sp['text']}" for sp in structural] or ["- (none filed yet)"]
+    r_lines = [f"- ({sp.get('score', 0):.2f}) {sp['text']}" for sp in relevant] \
+        or ["- (nothing in the archive is relevant to the current task)"]
+    ctx = f"\nContext Doc: `{context_ref}` (re-derive details from source).\n" if context_ref else ""
+    return f"""# Carry-forward brief for `{role}` (semantic working set)
+
+You are resuming on a Librarian-curated working set selected by on-device relevance.
+Architecture is pinned below; only the past work related to your current task was kept.
+Unrelated/settled work was filed to the cabinet — ask ORCH to `recall` it if needed.
+{ctx}
+## Codebase & architecture (always retained)
+{chr(10).join(s_lines)}
+
+## Relevant to your current work (similarity-gated)
+{chr(10).join(r_lines)}
+
+Resume your role from here.
+"""
+
+
 def build_brief(role: str, envelopes, facts, context_ref: str | None = None) -> str:
     """The carry-forward brief seeded into a fresh session in place of `--continue`.
 

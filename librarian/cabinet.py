@@ -9,6 +9,7 @@ Recall is LIKE-based full-text for v1 (dependency-free, works on any sqlite buil
 an embedding index is a future upgrade behind the same `recall()` interface.
 """
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ CREATE TABLE IF NOT EXISTS facts (
     topic      TEXT NOT NULL DEFAULT '',
     kind       TEXT NOT NULL DEFAULT 'note',
     body       TEXT NOT NULL,
+    durability TEXT,                            -- structural | episodic (semantic Librarian)
+    embedding  TEXT,                            -- json float vector for cosine recall
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_facts_role ON facts(role, seq);
@@ -34,6 +37,16 @@ CREATE TABLE IF NOT EXISTS compactions (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_comp_role ON compactions(role, seq);
+
+CREATE TABLE IF NOT EXISTS selections (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    role       TEXT NOT NULL,
+    structural INTEGER NOT NULL,   -- architecture spans pinned in
+    relevant   INTEGER NOT NULL,   -- episodic spans kept by similarity
+    snipped    INTEGER NOT NULL,   -- episodic spans filed to the cabinet
+    backend    TEXT,               -- fastembed | lexical
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -49,10 +62,16 @@ def _connect(path: Path) -> sqlite3.Connection:
 
 
 def init(path: Path) -> None:
-    """Create the cabinet and schema if absent. Idempotent."""
+    """Create the cabinet and schema if absent, and migrate older cabinets forward.
+    Idempotent."""
     con = _connect(path)
     try:
         con.executescript(_SCHEMA)
+        # migrate: add semantic columns to a pre-existing facts table
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(facts)")}
+        for col in ("durability", "embedding"):
+            if col not in cols:
+                con.execute(f"ALTER TABLE facts ADD COLUMN {col} TEXT")
         con.commit()
     finally:
         con.close()
@@ -61,20 +80,55 @@ def init(path: Path) -> None:
 # --------------------------------------------------------------------- facts
 
 def file_fact(path: Path, role: str, body: str, topic: str = "",
-              kind: str = "note") -> int:
+              kind: str = "note", durability: str | None = None,
+              embedding: list[float] | None = None) -> int:
     """Archive a span of (snipped) context so it can be recalled later.
-    Returns the new fact's seq."""
+
+    `durability` (structural|episodic) and `embedding` (a float vector) power the
+    semantic Librarian — embeddings are stored as JSON for cosine recall. Returns seq."""
     init(path)
+    emb = json.dumps(embedding) if embedding is not None else None
     con = _connect(path)
     try:
         cur = con.execute(
-            "INSERT INTO facts (role, topic, kind, body, created_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (role, topic, kind, body, _now_iso()))
+            "INSERT INTO facts (role, topic, kind, body, durability, embedding, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (role, topic, kind, body, durability, emb, _now_iso()))
         con.commit()
         return cur.lastrowid
     finally:
         con.close()
+
+
+def recall_semantic(path: Path, query_vec: list[float], role: str | None = None,
+                    limit: int = 5) -> list[dict]:
+    """Nearest-neighbour recall: rank filed spans by cosine to `query_vec`.
+
+    Brute-force over stored embeddings (fine for hundreds–thousands of spans; swap in
+    a vector index only past ~100k). Falls back to ignoring vector-less rows."""
+    from librarian.relevance import cosine
+    init(path)
+    con = _connect(path)
+    try:
+        q = "SELECT * FROM facts WHERE embedding IS NOT NULL"
+        params: list = []
+        if role is not None:
+            q += " AND role = ?"
+            params.append(role)
+        rows = list(con.execute(q, params))
+    finally:
+        con.close()
+    scored = []
+    for r in rows:
+        try:
+            vec = json.loads(r["embedding"])
+        except (TypeError, ValueError):
+            continue
+        d = dict(r)
+        d["score"] = cosine(query_vec, vec)
+        scored.append(d)
+    scored.sort(key=lambda d: d["score"], reverse=True)
+    return scored[:limit]
 
 
 def recall(path: Path, query: str, role: str | None = None,
@@ -166,6 +220,42 @@ def open_compactions(path: Path) -> list[sqlite3.Row]:
             "SELECT * FROM compactions WHERE after_in IS NULL ORDER BY seq ASC"))
     finally:
         con.close()
+
+
+def record_selection(path: Path, role: str, structural: int, relevant: int,
+                     snipped: int, backend: str = "") -> None:
+    """Log one relevance-gated selection (for the kept-vs-snipped stats)."""
+    init(path)
+    con = _connect(path)
+    try:
+        con.execute(
+            "INSERT INTO selections (role, structural, relevant, snipped, backend, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (role, structural, relevant, snipped, backend, _now_iso()))
+        con.commit()
+    finally:
+        con.close()
+
+
+def selection_stats(path: Path) -> dict:
+    """Rollup of relevance gating: how much was pinned vs kept vs snipped."""
+    init(path)
+    con = _connect(path)
+    try:
+        rows = list(con.execute("SELECT * FROM selections"))
+    finally:
+        con.close()
+    s = {"selections": len(rows), "structural": 0, "relevant": 0, "snipped": 0,
+         "backend": "", "by_role": {}}
+    for r in rows:
+        s["structural"] += r["structural"]; s["relevant"] += r["relevant"]
+        s["snipped"] += r["snipped"]; s["backend"] = r["backend"] or s["backend"]
+        slot = s["by_role"].setdefault(r["role"], {"structural": 0, "relevant": 0, "snipped": 0})
+        slot["structural"] += r["structural"]; slot["relevant"] += r["relevant"]
+        slot["snipped"] += r["snipped"]
+    total = s["structural"] + s["relevant"] + s["snipped"]
+    s["snip_pct"] = round(100 * s["snipped"] / total, 1) if total else 0
+    return s
 
 
 def stats(path: Path) -> dict:
