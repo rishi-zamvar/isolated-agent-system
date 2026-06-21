@@ -80,10 +80,24 @@ def _get_nested(snapshot: dict, path: str) -> Any:
     return obj
 
 
+def _is_timeseries(value: Any) -> bool:
+    return (isinstance(value, list) and bool(value)
+            and isinstance(value[-1], dict) and "value" in value[-1])
+
+
 def resolve_entry(entry: dict, snapshot: dict) -> dict:
-    """Return entry + {value, status} without mutating entry."""
-    value = _get_nested(snapshot, entry["source"])
-    return {**entry, "value": value, "status": resolve_status(value, entry.get("insight"))}
+    """Return entry + {value, status} without mutating entry.
+
+    Timeseries values (list of {t, value} dicts): headline = last bucket value;
+    status derived from the headline so insight thresholds apply meaningfully.
+    Non-timeseries collections fall through to resolve_status which returns neutral.
+    """
+    raw = _get_nested(snapshot, entry["source"])
+    if _is_timeseries(raw):
+        headline = raw[-1]["value"]
+        return {**entry, "value": raw,
+                "status": resolve_status(headline, entry.get("insight"))}
+    return {**entry, "value": raw, "status": resolve_status(raw, entry.get("insight"))}
 
 
 def build_response(catalog: list[dict], snapshot: dict, generated_at: str) -> dict:
@@ -147,6 +161,7 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
     commits = bloat.from_repo(repo_path) if repo_path else []
 
     econ = economy.economy(recs)
+    econ["cache_hit_series"] = economy.cache_hit_series(recs)
     flw = flow.flow(rows)
     blt = bloat.bloat(commits)
     verdicts = _compute.verdicts_from_rows(rows)

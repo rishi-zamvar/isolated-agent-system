@@ -129,6 +129,33 @@ def waste(recs: list[dict]) -> dict:
             "no_edit_pct": round(100 * len(idle) / len(recs), 1) if recs else 0}
 
 
+def cache_hit_series(recs: list[dict], buckets: int = 24) -> list[dict]:
+    """Cache-hit ratio bucketed over time — [{t: iso8601, value: ratio}] x buckets.
+
+    Buckets records by 'ts' (float unix epoch) into N equal windows using
+    cache_hit_ratio per bucket.  Pre-split records (only 'in', no in_fresh/in_cache)
+    degrade gracefully: treated as all-fresh so ratio=0.0 until new data lands.
+    """
+    import datetime as _dt
+    ts_vals = [r["ts"] for r in recs if r.get("ts") is not None]
+    if not ts_vals:
+        return [{"t": _dt.datetime.fromtimestamp(i * 3600, tz=_dt.timezone.utc).isoformat(),
+                 "value": 0.0}
+                for i in range(buckets)]
+    ts_min, ts_max = min(ts_vals), max(ts_vals)
+    window = (ts_max - ts_min) / buckets if ts_max > ts_min else 1.0
+    bucket_recs: list[list] = [[] for _ in range(buckets)]
+    for r in recs:
+        if r.get("ts") is None:
+            continue
+        i = min(int((r["ts"] - ts_min) / window), buckets - 1)
+        bucket_recs[i].append(r)
+    return [{"t": _dt.datetime.fromtimestamp(ts_min + i * window,
+                                              tz=_dt.timezone.utc).isoformat(),
+             "value": cache_hit_ratio(bucket_recs[i])}
+            for i in range(buckets)]
+
+
 def economy(recs: list[dict]) -> dict:
     """The full §A rollup for the Data view."""
     return {
