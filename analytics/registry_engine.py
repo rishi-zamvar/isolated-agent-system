@@ -52,6 +52,11 @@ def resolve_status(value: Any, insight: dict | None) -> str:
         return "unknown"
     if not insight:
         return "neutral"
+    # Non-scalar values (per-role maps, timeseries arrays) carry presence-only
+    # thresholds that the FE evaluates per element — a tile-level comparison is
+    # undefined here. Guard so op(value, thresh) cannot raise on a dict/list/str.
+    if not isinstance(value, (int, float)):
+        return "neutral"
     op, thresh = _parse_expr(insight.get("warn_if", ""))
     if op is not None and op(value, thresh):
         return "warn"

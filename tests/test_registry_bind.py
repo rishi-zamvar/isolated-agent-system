@@ -111,6 +111,21 @@ def test_fleet_metrics_no_accepts():
 # ============================================================ build_snapshot ==
 
 from analytics.registry_engine import build_snapshot
+from analytics.registry_engine import resolve_status
+
+
+def test_resolve_status_non_scalar_value_is_neutral_not_crash():
+    """A per-role map / series array must not be compared to a scalar threshold.
+
+    Regression: librarian_recalls_by_role resolves to a dict and (per AC4 lock
+    852916c2) keeps a presence-only warn_if; op(dict, thresh) raised TypeError and
+    500'd /api/registry. Non-scalar values resolve to 'neutral' instead.
+    """
+    assert resolve_status({"be": 1, "qa": 0}, {"warn_if": "> 0", "good_if": "== 0"}) == "neutral"
+    assert resolve_status([{"t": "x", "value": 0.3}], {"warn_if": "< 0.25"}) == "neutral"
+    # scalars (incl. bool 0/1 for librarian_ideal) still evaluate
+    assert resolve_status(0, {"warn_if": "== 0"}) == "warn"
+    assert resolve_status(True, {"warn_if": "== 0", "good_if": "== 1"}) == "good"
 
 
 def test_build_snapshot_optimizer_key_present(tmp_path):
