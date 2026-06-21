@@ -14,11 +14,31 @@ and for ORCH by launch_orch.sh on the Mac.
 import json
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 
-from agentctl import heartbeat
-from profiles.model_presets import model_for
+from agentctl import heartbeat, store as _store
+from profiles.model_presets import model_for, model_for_wake
+
+# the agents work in this repo; a change to its git tree across a run = "edited code"
+# (the only reliable signal — `claude -p --output-format json` omits tool calls).
+_WORKREPO = os.environ.get("AGENT_WORKREPO") or os.getcwd()
+
+
+def _ws_sig(repo: str):
+    """A cheap signature of the workspace git state (HEAD + dirty set). None if not a
+    git repo. Comparing before/after a run detects whether the agent changed code."""
+    try:
+        head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True, timeout=8)
+        if head.returncode != 0:
+            return None
+        porc = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                              capture_output=True, text=True, timeout=8)
+        return head.stdout.strip() + "\n" + porc.stdout
+    except Exception:
+        return None
 
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
@@ -39,7 +59,8 @@ def pending_wakes(wake_dir, role: str, seen: set[str]) -> list[str]:
 
 
 def claude_cmd(role: str, brief_text: str | None = None,
-               session_id: str | None = None) -> list[str]:
+               session_id: str | None = None,
+               model: str | None = None) -> list[str]:
     """The headless invocation that processes this role's inbox.
 
     Passes --model EXPLICITLY from the active preset — `claude -p` does NOT honor
@@ -55,8 +76,12 @@ def claude_cmd(role: str, brief_text: str | None = None,
     - compaction: when the Librarian leaves a `brief_text`, we start a FRESH session
       (no resume/continue) seeded with that curated carry-forward. The bloated
       transcript is abandoned; the new session_id captured from this run becomes the
-      one every subsequent `--resume` continues — so the abandon is deterministic."""
-    model = model_for(role, os.environ.get("FLEET_PRESET", "standard"))
+      one every subsequent `--resume` continues — so the abandon is deterministic.
+
+    `model` is the escalated or downgraded model chosen by the caller after peeking
+    the unread inbox types; when None the preset default for this role is used."""
+    if model is None:
+        model = model_for(role, os.environ.get("FLEET_PRESET", "standard"))
     base = ["claude", "-p"]
     if brief_text is not None:
         prompt = brief_text.rstrip() + "\n\n" + WAKE_PROMPT.format(role=role)
@@ -99,14 +124,37 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
     `compacted` flags a Librarian brief-seeded fresh run so the Librarian can match
     the post-compaction measurement to the right run (not an intervening one)."""
     busy = status_dir / f"{role}.status"
+    hb = status_dir / f"{role}.hb"
 
     def run(cmd, compacted: bool = False):
         try:
             busy.write_text("processing")           # live beacon: claude running
         except OSError:
             pass
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        edited = False
+        # keepalive: a claude run blocks the react loop, so without this the heartbeat
+        # + 'processing' beacon go stale and the monitor wrongly shows the agent offline
+        # on any run longer than ~3min. Refresh both every few seconds until it returns.
+        stop = threading.Event()
+
+        def keepalive():
+            while not stop.wait(6):
+                try:
+                    busy.write_text("processing")
+                    hb.write_text(str(time.time()))
+                except OSError:
+                    pass
+        sig0 = _ws_sig(_WORKREPO)                     # workspace state before the run
+        ka = threading.Thread(target=keepalive, daemon=True)
+        ka.start()
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            stop.set()
+        # "made edits" = the agent changed the workspace git tree during the run.
+        # This is the reliable signal; the JSON-string check is a weak fallback.
+        sig1 = _ws_sig(_WORKREPO)
+        git_edited = sig0 is not None and sig1 is not None and sig0 != sig1
+        edited = git_edited                          # default; JSON heuristic may also set it
         try:
             d = json.loads(r.stdout or "{}")
             u = d.get("usage") or {}
@@ -116,10 +164,9 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                     session_path(status_dir, role).write_text(sid, encoding="utf-8")
                 except OSError:
                     pass
-            # "made edits" = the run used a file-mutating tool
             text = json.dumps(d)
-            edited = ('"Edit"' in text or '"Write"' in text or '"NotebookEdit"' in text
-                      or '"MultiEdit"' in text)
+            edited = git_edited or ('"Edit"' in text or '"Write"' in text
+                                    or '"NotebookEdit"' in text or '"MultiEdit"' in text)
             in_fresh = u.get("input_tokens") or 0
             in_cache = u.get("cache_read_input_tokens") or 0
             rec = {"role": role,
@@ -150,11 +197,17 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
     return run
 
 
-def drive_once(role: str, runner, briefs_dir=None, session_dir=None) -> None:
+def drive_once(role: str, runner, briefs_dir=None, session_dir=None,
+               store_path=None) -> None:
     """Drive one wake. If the Librarian left a carry-forward brief, run a fresh
     session seeded with it; otherwise resume the captured session (or bootstrap with
     --continue). The brief is consumed ONLY after a successful run, so a spawn failure
-    leaves it for the next wake instead of silently abandoning the compaction."""
+    leaves it for the next wake instead of silently abandoning the compaction.
+
+    `store_path` enables per-wake model escalation: unread envelope types are peeked
+    before the drive and the highest-priority model tier is selected (Opus for
+    ChallengeThread/VulnFinding/ThreatModel/ReviewVerdict, Haiku for bare routing,
+    preset default otherwise). None disables peeking (preserves legacy behaviour)."""
     bp = brief_for(briefs_dir, role)
     brief_text = None
     if bp is not None:
@@ -163,7 +216,13 @@ def drive_once(role: str, runner, briefs_dir=None, session_dir=None) -> None:
         except OSError:
             brief_text = None
     session_id = None if bp is not None else read_session(session_dir, role)
-    ret = runner(claude_cmd(role, brief_text=brief_text, session_id=session_id),
+    model = None
+    if store_path is not None and Path(store_path).exists():
+        te = [(r["type"], r["event"])
+              for r in _store.inbox(Path(store_path), role, unread_only=True)]
+        model = model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
+    ret = runner(claude_cmd(role, brief_text=brief_text, session_id=session_id,
+                            model=model),
                  compacted=bp is not None)
     ok = getattr(ret, "returncode", 0) == 0          # None (test stubs) -> ok
     if bp is not None and ok:
@@ -189,6 +248,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
     status_dir = Path(wake_dir).parent / "heartbeats"
     token_log = Path(wake_dir).parent / "token_usage.jsonl"
     briefs_dir = Path(wake_dir).parent / "briefs"  # Librarian drops carry-forwards here
+    store_path = os.environ.get("AGENTCTL_STORE")
     status_dir.mkdir(parents=True, exist_ok=True)
     if runner is None:
         runner = make_runner(role, token_log, status_dir)
@@ -205,7 +265,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         if pending_wakes(wake_dir, role, seen):
             try:
                 drive_once(role, runner, briefs_dir=briefs_dir,
-                           session_dir=status_dir)
+                           session_dir=status_dir, store_path=store_path)
             except Exception as e:  # one bad drive must not kill the reactor
                 print(f"[reactor:{role}] drive error: {e}", flush=True)
             drives += 1

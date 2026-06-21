@@ -23,10 +23,12 @@ PRESETS: dict[str, dict[str, str]] = {
     "all-opus": {r: OPUS for r in ROLES},
 
     # DEFAULT — deep where a miss is expensive (apex-skeptic, architecture, security,
-    # adversarial verify, hardest implementation), cheap where work is structured.
+    # adversarial verify), cheap for implementation (Sonnet is excellent at code).
+    # BE moved OPUS->SONNET: it was the costliest agent and was the only implementer
+    # left on Opus; live data showed ~82% of spend was Opus, BE the biggest slice.
     "standard": {
-        "orch": OPUS, "tl": OPUS, "sec": OPUS, "qa": OPUS, "be": OPUS,
-        "pm": SONNET, "fe": SONNET, "plat": SONNET,
+        "orch": OPUS, "tl": OPUS, "sec": OPUS, "qa": OPUS,
+        "be": SONNET, "pm": SONNET, "fe": SONNET, "plat": SONNET,
     },
 
     # Cost/latency-first — keep the apex skeptic + security sharp, rest on Sonnet.
@@ -45,7 +47,30 @@ PRESETS: dict[str, dict[str, str]] = {
 
 DEFAULT_PRESET = "standard"
 
+# Types that always require deep reasoning regardless of preset.
+_OPUS_TYPES = frozenset({"ChallengeThread", "VulnFinding", "ThreatModel", "ReviewVerdict"})
+
+# (type, event) pairs cheap enough for Haiku — pure routing, no analysis.
+_CHEAP = frozenset({
+    ("Ticket", "STATUS_ACK"),
+    ("Ticket", "ACK"),
+    ("Ticket", "NOTE"),
+})
+
 
 def model_for(role: str, preset: str = DEFAULT_PRESET) -> str:
     """Model id for `role` under `preset`. Falls back to the default preset."""
     return PRESETS.get(preset, PRESETS[DEFAULT_PRESET])[role]
+
+
+def model_for_wake(type_events: list, role: str,
+                   preset: str = DEFAULT_PRESET) -> str:
+    """Model for one wake given the (type, event) pairs of pending unread messages.
+
+    Opus escalates if any message needs deep reasoning; Haiku applies only when
+    every message is cheap routing; otherwise the preset default for `role` wins."""
+    if any(t in _OPUS_TYPES for t, _ in type_events):
+        return OPUS
+    if type_events and all((t, e) in _CHEAP for t, e in type_events):
+        return HAIKU
+    return model_for(role, preset)
