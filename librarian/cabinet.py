@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS compactions (
     seq        INTEGER PRIMARY KEY AUTOINCREMENT,
     role       TEXT NOT NULL,
     before_in  INTEGER NOT NULL,   -- input tokens on the bloated run
-    after_in   INTEGER,            -- input tokens on the first post-compaction run
+    after_in   INTEGER,            -- input tokens on the post-compaction (stamped) run
+    trigger_ts REAL NOT NULL,      -- ts of the bloated run (same clock domain as the log)
     opened_at  REAL NOT NULL,      -- wall clock when the compaction was scheduled
     created_at TEXT NOT NULL
 );
@@ -83,10 +84,12 @@ def recall(path: Path, query: str, role: str | None = None,
     This backs the agents' `recall(query)` tool — pull a span back into context
     only when actually needed, then forget it again."""
     init(path)
+    # escape LIKE wildcards in user input so '%'/'_' are matched literally
+    safe = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     con = _connect(path)
     try:
-        q = "SELECT * FROM facts WHERE body LIKE ?"
-        params: list = [f"%{query}%"]
+        q = "SELECT * FROM facts WHERE body LIKE ? ESCAPE '\\'"
+        params: list = [f"%{safe}%"]
         if role is not None:
             q += " AND role = ?"
             params.append(role)
@@ -111,15 +114,21 @@ def facts_for(path: Path, role: str, limit: int = 8) -> list[sqlite3.Row]:
 
 # -------------------------------------------------------------- compactions
 
-def open_compaction(path: Path, role: str, before_in: int, now: float) -> int:
+def open_compaction(path: Path, role: str, before_in: int, now: float,
+                    trigger_ts: float | None = None) -> int:
     """Record a scheduled compaction (before_in = tokens on the bloated run).
-    `after_in` is filled in once the post-compaction run lands. Returns its seq."""
+
+    `trigger_ts` is the bloated run's own ts — the close side matches the
+    post-compaction run against THIS (same clock domain as the token log), never
+    against the daemon's wall clock, so cross-machine skew can't strand it open.
+    `after_in` is filled in once the stamped post-compaction run lands. Returns seq."""
     init(path)
     con = _connect(path)
     try:
         cur = con.execute(
-            "INSERT INTO compactions (role, before_in, after_in, opened_at, created_at) "
-            "VALUES (?, ?, NULL, ?, ?)", (role, before_in, now, _now_iso()))
+            "INSERT INTO compactions (role, before_in, after_in, trigger_ts, opened_at, created_at) "
+            "VALUES (?, ?, NULL, ?, ?, ?)",
+            (role, before_in, now if trigger_ts is None else trigger_ts, now, _now_iso()))
         con.commit()
         return cur.lastrowid
     finally:
@@ -175,9 +184,11 @@ def stats(path: Path) -> dict:
         b = r["before_in"] or 0
         a = r["after_in"]
         slot = by_role.setdefault(
-            r["role"], {"compactions": 0, "before": 0, "after": 0, "saved": 0})
-        slot["compactions"] += 1
+            r["role"],
+            {"compactions": 0, "scheduled": 0, "before": 0, "after": 0, "saved": 0})
+        slot["scheduled"] += 1          # every row (closed counts separately)
         if a is not None:
+            slot["compactions"] += 1
             slot["before"] += b
             slot["after"] += a
             slot["saved"] += b - a

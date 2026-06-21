@@ -30,12 +30,14 @@ def test_react_loop_drives_once_per_wake(wake_dir):
     # pre-seed one wake; loop a few iterations with no sleep
     wake.write_wake(wake_dir, "be", "e1")
     drives = agent_reactor.react_loop(
-        "be", wake_dir, poll=0, runner=lambda cmd: calls.append(cmd), max_iters=3)
+        "be", wake_dir, poll=0,
+        runner=lambda cmd, compacted=False: calls.append(cmd), max_iters=3)
     assert drives == 1
     assert calls and calls[0][0] == "claude"
 
 
 def test_react_loop_no_wake_no_drive(wake_dir):
     drives = agent_reactor.react_loop(
-        "be", wake_dir, poll=0, runner=lambda cmd: None, max_iters=3)
+        "be", wake_dir, poll=0,
+        runner=lambda cmd, compacted=False: None, max_iters=3)
     assert drives == 0

@@ -162,15 +162,57 @@ def test_close_after_runs_records_after_in(tmp_path, store_path):
     log = _log(tmp_path, [{"role": "pm", "in": 600_000, "ts": 10}])
     briefs = tmp_path / "briefs"
     daemon.run_once(store_path, cab, log, briefs, now=20.0, threshold=200_000)
-    # post-compaction small run lands in the log at ts=30
+    # post-compaction STAMPED run lands in the log at ts=30
     log2 = _log(tmp_path, [
         {"role": "pm", "in": 600_000, "ts": 10},
-        {"role": "pm", "in": 22_000, "ts": 30},
+        {"role": "pm", "in": 22_000, "ts": 30, "compacted": True},
     ])
     closed = daemon.close_after_runs(cab, log2)
     assert closed == ["pm"]
     st = cabinet.stats(cab)
     assert st["by_role"]["pm"]["saved"] == 600_000 - 22_000
+
+
+def test_close_ignores_intervening_bloated_run(tmp_path, store_path):
+    """P1-1: an unstamped --continue run that lands first must NOT close the
+    compaction with a bogus after-value; only the stamped fresh run counts."""
+    store.init(store_path)
+    cab = tmp_path / "cabinet.db"
+    log = _log(tmp_path, [{"role": "pm", "in": 600_000, "ts": 10}])
+    briefs = tmp_path / "briefs"
+    daemon.run_once(store_path, cab, log, briefs, now=20.0, threshold=200_000)
+    log2 = _log(tmp_path, [
+        {"role": "pm", "in": 600_000, "ts": 10},
+        {"role": "pm", "in": 590_000, "ts": 25},                   # in-flight bloated
+        {"role": "pm", "in": 22_000, "ts": 30, "compacted": True},  # real fresh run
+    ])
+    daemon.close_after_runs(cab, log2)
+    st = cabinet.stats(cab)
+    assert st["by_role"]["pm"]["saved"] == 600_000 - 22_000  # not 600k-590k
+
+
+def test_compaction_stays_open_without_stamp(tmp_path, store_path):
+    """A post-trigger run with no compacted stamp does not close the compaction."""
+    store.init(store_path)
+    cab = tmp_path / "cabinet.db"
+    log = _log(tmp_path, [{"role": "pm", "in": 600_000, "ts": 10}])
+    briefs = tmp_path / "briefs"
+    daemon.run_once(store_path, cab, log, briefs, now=20.0, threshold=200_000)
+    log2 = _log(tmp_path, [
+        {"role": "pm", "in": 600_000, "ts": 10},
+        {"role": "pm", "in": 30_000, "ts": 30},  # no "compacted": True
+    ])
+    assert daemon.close_after_runs(cab, log2) == []
+    assert cabinet.has_open_compaction(cab, "pm") is True
+
+
+def test_recall_escapes_like_wildcards(tmp_path):
+    p = _cab(tmp_path)
+    cabinet.file_fact(p, "pm", "the value is 100% complete")
+    cabinet.file_fact(p, "pm", "unrelated note")
+    # '%' must be literal, not a wildcard that matches everything
+    assert len(cabinet.recall(p, "100%")) == 1
+    assert cabinet.recall(p, "zz%") == []
 
 
 # --------------------------------------------------------------- reactor -----
@@ -183,22 +225,55 @@ def test_claude_cmd_with_brief_drops_continue_and_seeds_context():
     assert "pm" in cmd[-1]
 
 
+def test_claude_cmd_resume_when_session_id():
+    cmd = agent_reactor.claude_cmd("pm", session_id="sess-abc")
+    assert "--continue" not in cmd
+    assert cmd[2:4] == ["--resume", "sess-abc"]
+
+
 def test_drive_once_consumes_brief_after_run(tmp_path):
     briefs = tmp_path / "briefs"
     briefs.mkdir()
     (briefs / "pm.brief").write_text("SEED")
     calls = []
-    agent_reactor.drive_once("pm", lambda cmd: calls.append(cmd),
+    agent_reactor.drive_once("pm", lambda cmd, compacted=False: calls.append((cmd, compacted)),
                              briefs_dir=briefs)
-    # ran with the seed, then deleted the brief (fresh session is now live)
-    assert "SEED" in calls[0][-1]
+    # ran with the seed (stamped compacted), then deleted the brief
+    assert "SEED" in calls[0][0][-1]
+    assert calls[0][1] is True
     assert not (briefs / "pm.brief").exists()
 
 
-def test_drive_once_without_brief_uses_continue(tmp_path):
+def test_drive_once_keeps_brief_on_runner_failure(tmp_path):
+    """P1-3: a failed run (nonzero returncode) must NOT consume the brief."""
+    briefs = tmp_path / "briefs"
+    briefs.mkdir()
+    (briefs / "pm.brief").write_text("SEED")
+
+    class _Failed:
+        returncode = 1
+
+    agent_reactor.drive_once("pm", lambda cmd, compacted=False: _Failed(),
+                             briefs_dir=briefs)
+    assert (briefs / "pm.brief").exists()  # survives for the next wake
+
+
+def test_drive_once_resumes_captured_session(tmp_path):
+    briefs = tmp_path / "briefs"
+    briefs.mkdir()
+    sess = tmp_path / "heartbeats"
+    sess.mkdir()
+    (sess / "pm.session").write_text("sess-xyz")
+    calls = []
+    agent_reactor.drive_once("pm", lambda cmd, compacted=False: calls.append(cmd),
+                             briefs_dir=briefs, session_dir=sess)
+    assert "--resume" in calls[0] and "sess-xyz" in calls[0]
+
+
+def test_drive_once_without_brief_or_session_uses_continue(tmp_path):
     briefs = tmp_path / "briefs"
     briefs.mkdir()
     calls = []
-    agent_reactor.drive_once("pm", lambda cmd: calls.append(cmd),
+    agent_reactor.drive_once("pm", lambda cmd, compacted=False: calls.append(cmd),
                              briefs_dir=briefs)
     assert "--continue" in calls[0]

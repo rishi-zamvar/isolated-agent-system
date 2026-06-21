@@ -43,14 +43,20 @@ def _read_token_log(token_log) -> list[dict]:
     return out
 
 
-def latest_in_per_role(token_log) -> dict[str, int]:
-    """Most recent input-token count per role (later records overwrite earlier)."""
-    latest: dict[str, int] = {}
-    for rec in _read_token_log(token_log):
+def _latest_per_role(records: list[dict]) -> dict[str, dict]:
+    """Most recent full record per role (later records overwrite earlier)."""
+    latest: dict[str, dict] = {}
+    for rec in records:
         role = rec.get("role")
         if role:
-            latest[role] = rec.get("in") or 0
+            latest[role] = rec
     return latest
+
+
+def latest_in_per_role(token_log) -> dict[str, int]:
+    """Most recent input-token count per role (thin wrapper, reads the log)."""
+    return {r: (rec.get("in") or 0)
+            for r, rec in _latest_per_role(_read_token_log(token_log)).items()}
 
 
 def roles_needing_compaction(token_log, threshold: int = THRESHOLD_IN) -> list[str]:
@@ -73,44 +79,60 @@ def run_once(store_path, cabinet_path, token_log, briefs_dir, now: float,
     briefs = Path(briefs_dir)
     briefs.mkdir(parents=True, exist_ok=True)
 
+    records = _read_token_log(token_log)            # single read per tick (P3-1)
+    latest = _latest_per_role(records)
     opened = []
-    for role in roles_needing_compaction(token_log, threshold):
+    for role, rec in sorted(latest.items()):
+        if (rec.get("in") or 0) < threshold:
+            continue
         brief_file = briefs / f"{role}.brief"
         # skip if a compaction is already pending or the brief hasn't been consumed
         if cabinet.has_open_compaction(cabinet_path, role) or brief_file.exists():
             continue
-        before_in = latest_in_per_role(token_log)[role]
+        before_in = rec.get("in") or 0              # from the SAME snapshot (P2-1)
+        trigger_ts = rec.get("ts") or now
         envs = store.activity(store_path, role, limit=distill._MAX_ACTIVITY)
         facts = cabinet.facts_for(cabinet_path, role)
         _atomic_write(brief_file,
                       distill.build_brief(role, envs, facts, context_ref))
         cabinet.file_fact(cabinet_path, role, distill.activity_digest(role, envs),
                           topic="compaction", kind="snip")
-        cabinet.open_compaction(cabinet_path, role, before_in, now)
+        cabinet.open_compaction(cabinet_path, role, before_in, now, trigger_ts)
         opened.append(role)
 
-    closed = close_after_runs(cabinet_path, token_log)
+    closed = _close(cabinet_path, records)
     return {"opened": opened, "closed": closed}
 
 
-def _first_in_after(records: list[dict], role: str, after_ts: float):
-    """Input tokens of the earliest run for `role` strictly after `after_ts`."""
-    later = sorted((r for r in records
-                    if r.get("role") == role and (r.get("ts") or 0) > after_ts),
-                   key=lambda r: r.get("ts") or 0)
+def _post_compaction_in(records: list[dict], role: str, trigger_ts: float):
+    """Input tokens of the post-compaction run: the earliest run for `role` that the
+    reactor STAMPED `compacted=True` and that landed after the triggering run.
+
+    Keying on the explicit stamp (not merely 'next run after a wall clock') is what
+    makes the close correct: an intervening bloated `--continue` run that happens to
+    land first is `compacted=False` and is ignored, and we compare against the
+    triggering run's own ts (same clock domain), immune to cross-machine skew."""
+    later = sorted(
+        (r for r in records
+         if r.get("role") == role and r.get("compacted")
+         and (r.get("ts") or 0) > trigger_ts),
+        key=lambda r: r.get("ts") or 0)
     return (later[0].get("in") or 0) if later else None
 
 
-def close_after_runs(cabinet_path, token_log) -> list[str]:
-    """Close any open compaction whose post-compaction run has been recorded."""
-    records = _read_token_log(token_log)
+def _close(cabinet_path, records: list[dict]) -> list[str]:
     closed = []
     for o in cabinet.open_compactions(cabinet_path):
-        after = _first_in_after(records, o["role"], o["opened_at"])
+        after = _post_compaction_in(records, o["role"], o["trigger_ts"])
         if after is not None:
             cabinet.close_compaction(cabinet_path, o["seq"], after)
             closed.append(o["role"])
     return closed
+
+
+def close_after_runs(cabinet_path, token_log) -> list[str]:
+    """Close any open compaction whose stamped post-compaction run has been recorded."""
+    return _close(cabinet_path, _read_token_log(token_log))
 
 
 def loop(store_path, cabinet_path, token_log, briefs_dir, poll: float = 30.0,

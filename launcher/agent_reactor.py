@@ -38,7 +38,8 @@ def pending_wakes(wake_dir, role: str, seen: set[str]) -> list[str]:
     return out
 
 
-def claude_cmd(role: str, brief_text: str | None = None) -> list[str]:
+def claude_cmd(role: str, brief_text: str | None = None,
+               session_id: str | None = None) -> list[str]:
     """The headless invocation that processes this role's inbox.
 
     Passes --model EXPLICITLY from the active preset — `claude -p` does NOT honor
@@ -46,20 +47,40 @@ def claude_cmd(role: str, brief_text: str | None = None) -> list[str]:
     the account-default (Opus) and the cost tiering never takes effect.
     --output-format json so we can read back token usage + cost + tool activity.
 
-    Two context modes:
-    - normal: `--continue` keeps the session warm (cheap cold-start amortization).
-    - compaction: when the Librarian leaves a `brief_text`, we DROP `--continue` and
-      start a fresh, small session seeded with that curated carry-forward. This is
-      the token saver — the bloated transcript is abandoned; the next runs `--continue`
-      the new small session."""
+    Three context modes:
+    - resume: `--resume <session_id>` continues a KNOWN session. We capture the real
+      session_id from each run's JSON, so continuation is deterministic — not the
+      implicit 'most recent session' that `--continue` guesses at.
+    - bootstrap: no session_id yet (first run) → `--continue` to attach/create.
+    - compaction: when the Librarian leaves a `brief_text`, we start a FRESH session
+      (no resume/continue) seeded with that curated carry-forward. The bloated
+      transcript is abandoned; the new session_id captured from this run becomes the
+      one every subsequent `--resume` continues — so the abandon is deterministic."""
     model = model_for(role, os.environ.get("FLEET_PRESET", "standard"))
     base = ["claude", "-p"]
-    if brief_text is None:
-        base += ["--continue"]
-        prompt = WAKE_PROMPT.format(role=role)
-    else:
+    if brief_text is not None:
         prompt = brief_text.rstrip() + "\n\n" + WAKE_PROMPT.format(role=role)
+    else:
+        prompt = WAKE_PROMPT.format(role=role)
+        base += ["--resume", session_id] if session_id else ["--continue"]
     return base + ["--model", model, "--output-format", "json", prompt]
+
+
+def session_path(session_dir, role: str) -> Path:
+    return Path(session_dir) / f"{role}.session"
+
+
+def read_session(session_dir, role: str) -> str | None:
+    """The captured session id for `role`, if the reactor has recorded one."""
+    if not session_dir:
+        return None
+    p = session_path(session_dir, role)
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
 
 
 def brief_for(briefs_dir, role: str) -> Path | None:
@@ -72,10 +93,14 @@ def brief_for(briefs_dir, role: str) -> Path | None:
 
 def make_runner(role: str, token_log: Path, status_dir: Path):
     """Default runner: run claude (capturing JSON), record per-run token usage +
-    cost + whether it changed code, and beacon live status (for the monitor)."""
+    cost + whether it changed code, capture the session id (for deterministic
+    --resume), and beacon live status (for the monitor).
+
+    `compacted` flags a Librarian brief-seeded fresh run so the Librarian can match
+    the post-compaction measurement to the right run (not an intervening one)."""
     busy = status_dir / f"{role}.status"
 
-    def run(cmd):
+    def run(cmd, compacted: bool = False):
         try:
             busy.write_text("processing")           # live beacon: claude running
         except OSError:
@@ -85,6 +110,12 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
         try:
             d = json.loads(r.stdout or "{}")
             u = d.get("usage") or {}
+            sid = d.get("session_id") or ""
+            if sid:                                  # remember it for --resume
+                try:
+                    session_path(status_dir, role).write_text(sid, encoding="utf-8")
+                except OSError:
+                    pass
             # "made edits" = the run used a file-mutating tool
             text = json.dumps(d)
             edited = ('"Edit"' in text or '"Write"' in text or '"NotebookEdit"' in text
@@ -93,7 +124,8 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                    "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
                    "in": (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0),
                    "out": u.get("output_tokens") or 0,
-                   "cost": d.get("total_cost_usd"), "edited": edited, "ts": time.time()}
+                   "cost": d.get("total_cost_usd"), "edited": edited,
+                   "compacted": compacted, "session_id": sid, "ts": time.time()}
             try:
                 with open(token_log, "a", encoding="utf-8") as f:
                     f.write(json.dumps(rec) + "\n")
@@ -112,10 +144,11 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
     return run
 
 
-def drive_once(role: str, runner, briefs_dir=None) -> None:
+def drive_once(role: str, runner, briefs_dir=None, session_dir=None) -> None:
     """Drive one wake. If the Librarian left a carry-forward brief, run a fresh
-    session seeded with it and consume the brief afterward (the fresh, small session
-    is now the live one that subsequent `--continue` runs extend)."""
+    session seeded with it; otherwise resume the captured session (or bootstrap with
+    --continue). The brief is consumed ONLY after a successful run, so a spawn failure
+    leaves it for the next wake instead of silently abandoning the compaction."""
     bp = brief_for(briefs_dir, role)
     brief_text = None
     if bp is not None:
@@ -123,8 +156,11 @@ def drive_once(role: str, runner, briefs_dir=None) -> None:
             brief_text = bp.read_text(encoding="utf-8")
         except OSError:
             brief_text = None
-    runner(claude_cmd(role, brief_text=brief_text))
-    if bp is not None:
+    session_id = None if bp is not None else read_session(session_dir, role)
+    ret = runner(claude_cmd(role, brief_text=brief_text, session_id=session_id),
+                 compacted=bp is not None)
+    ok = getattr(ret, "returncode", 0) == 0          # None (test stubs) -> ok
+    if bp is not None and ok:
         try:
             bp.unlink()
         except OSError:
@@ -161,7 +197,11 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            drive_once(role, runner, briefs_dir=briefs_dir)
+            try:
+                drive_once(role, runner, briefs_dir=briefs_dir,
+                           session_dir=status_dir)
+            except Exception as e:  # one bad drive must not kill the reactor
+                print(f"[reactor:{role}] drive error: {e}", flush=True)
             drives += 1
         time.sleep(poll)
         i += 1
