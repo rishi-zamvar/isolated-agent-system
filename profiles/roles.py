@@ -27,6 +27,34 @@ def _worker_perms(deny: list[str]) -> dict:
     return {"defaultMode": "bypassPermissions", "deny": deny}
 
 
+# Target share of an agent's tool-runs that should be CODE EDITS — the "stay in your lane"
+# bar. Thinking flows UP, implementation flows DOWN: the engineers do ~all the coding; PM/TL
+# think and delegate. Everyone keeps full edit access — this is behavioural discipline + a
+# dashboard signal, NOT a permission block (agents edit where THEY identify a change).
+EDIT_TARGET: dict[str, float] = {
+    "orch": 0.00,   # never edits — decisions + audit only
+    "pm":   0.10,   # think + delegate; touch code only for a change you specifically identify
+    "tl":   0.10,   # architecture + review; rarely edits
+    "be":   0.90,   # implementer — almost every run ships code
+    "fe":   0.90,   # implementer — almost every run ships code
+    "plat": 0.50,   # CI/infra: half editing, half operating
+    "qa":   0.50,   # tests/gates: half editing, half verifying
+    "sec":  0.50,   # audits + fixes: half editing, half analysis
+}
+
+
+# Two agent KINDS, specialized from the base worker. A PLANNER decides (its unit of work is
+# a bus artifact — Ticket / AcceptanceCriteria / ADR / ReviewVerdict / ruling; a code change
+# is a Ticket it ROUTES to an engineer). An IMPLEMENTER builds (its unit of work is code; its
+# surface is the repo). The edit-ratio distribution (~90 implementers / ~50 mixed / ~5-10
+# planners, per EDIT_TARGET) EMERGES from the loop shape — it is never mandated as a number.
+KIND: dict[str, str] = {
+    "orch": "planner", "pm": "planner", "tl": "planner",
+    "be": "implementer", "fe": "implementer", "plat": "implementer",
+    "qa": "implementer", "sec": "implementer",
+}
+
+
 ROLES: dict[str, RoleSpec] = {
     "orch": RoleSpec(
         title="ORCH — the head (final say)",
