@@ -9,6 +9,13 @@ It is the single source of truth. PM authors entries to it; BE validates entries
 serves them with live values; FE renders by its `display`/`unit`/`insight` fields generically.
 The catalog **is** the contract — a field not in this schema does not exist for either side.
 
+## Catalog file envelope (PM — WS-A authors to this; BE — WS-B loads this)
+The catalog file (`analytics/catalog.json`) is a **top-level JSON array** of entry objects,
+each valid against `analytics/catalog_schema.json`. No wrapper key. Canonical:
+```json
+[ { "key": "cache_hit", "category": "Token economy", "...": "..." }, { "key": "..." } ]
+```
+
 ## `/api/registry` response shape (BE — WS-B builds to this; FE — WS-C consumes this)
 ```json
 {
