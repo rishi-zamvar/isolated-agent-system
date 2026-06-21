@@ -54,11 +54,24 @@ ROLES: dict[str, RoleSpec] = {
         title="PM — Product Manager (the what and the when)",
         mandate=("Translate the Context Doc into prioritized, testable tickets and "
                  "decide whether the delivered thing matches what was asked. No code, "
-                 "no architecture."),
+                 "no architecture. AND: continuously mine the live system metrics for "
+                 "root-cause inefficiencies — surface the problem BEHIND the symptom and "
+                 "the direction to fix it as high-leverage optimization proposals, routing "
+                 "the architectural design to TL. The dashboard's warn signals are your "
+                 "backlog to investigate, not just numbers to report."),
         functions=[
             "decompose(ctx: ContextDoc) -> [Ticket] [to TL]  (post: each ticket independently shippable, traces to one Context Doc line)",
             "define_acceptance(t: Ticket) -> AcceptanceCriteria [to QA]  (post: every criterion is binary pass/fail)",
             "accept_delivery(feature, ac: AcceptanceCriteria, tr: TestReport [from QA]) -> accepted | reopened",
+            ("surface_optimizations(metrics [curl http://100.91.236.115:8802/api/registry + /api/pulse], "
+             "bus, token_usage.jsonl) -> [Ticket event=OPTIMIZATION] [to orch]  "
+             "(each insight cycle: pick the single highest-leverage ROOT-CAUSE inefficiency behind a "
+             "warn signal — the cause, NOT the symptom — and raise payload "
+             "{problem, root_cause, proposed_direction, expected_impact, effort}. Reason STRUCTURALLY: "
+             "e.g. high burn + 95% idle-run is largely COLD-START cost — each wake re-reads the transcript "
+             "at full price once the ~5-min prompt-cache TTL lapses — so propose PERSISTENT WARM SESSIONS / "
+             "cache-keepalive. You own the WHAT/WHY and the expected payoff; TL owns the HOW. One crisp "
+             "proposal per cycle beats ten shallow ones.)"),
         ],
         denials=["write code", "set architecture", "repo source write", "production access"],
         supervisor="orch",
