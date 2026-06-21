@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 _SCHEMA = """
@@ -91,12 +92,25 @@ def inbox(path: Path, role: str, unread_only: bool = False) -> list[sqlite3.Row]
         con.close()
 
 
+def get(path: Path, env_id: str):
+    """Point-lookup a single envelope by id (indexed). None if absent.
+
+    Lets callers read one message without fetching a whole inbox (cli._cmd_read)."""
+    con = _connect(path)
+    try:
+        return con.execute(
+            "SELECT * FROM envelopes WHERE id = ?", (env_id,)).fetchone()
+    finally:
+        con.close()
+
+
 def mark_read(path: Path, env_id: str) -> None:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     con = _connect(path)
     try:
         con.execute(
             "UPDATE envelopes SET read_at = ?, status = 'read' WHERE id = ?",
-            ("2026-06-16T20:00:00Z", env_id),
+            (now, env_id),
         )
         con.commit()
     finally:

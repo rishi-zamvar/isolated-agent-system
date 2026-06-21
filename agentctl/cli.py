@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -37,24 +36,12 @@ def _cmd_inbox(args) -> int:
     return 0
 
 
-def _role_of(store_path: Path, env_id: str) -> str:
-    con = sqlite3.connect(store_path)
-    try:
-        row = con.execute("SELECT to_role FROM envelopes WHERE id=?",
-                          (env_id,)).fetchone()
-        return row[0] if row else ""
-    finally:
-        con.close()
-
-
 def _cmd_read(args) -> int:
     store.init(args.store)
-    role = _role_of(args.store, args.id)
-    rows = [r for r in store.inbox(args.store, role) if r["id"] == args.id]
-    if not rows:
+    r = store.get(args.store, args.id)
+    if r is None:
         print(f"no envelope {args.id}", file=sys.stderr)
         return 2
-    r = rows[0]
     print(f"--- {r['id']} ---")
     print(f"from: {r['from_role']}  to: {r['to_role']}  type: {r['type']}  "
           f"event: {r['event']}")
