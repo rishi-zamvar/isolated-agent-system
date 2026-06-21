@@ -14,6 +14,7 @@ and for ORCH by launch_orch.sh on the Mac.
 import json
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -99,13 +100,31 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
     `compacted` flags a Librarian brief-seeded fresh run so the Librarian can match
     the post-compaction measurement to the right run (not an intervening one)."""
     busy = status_dir / f"{role}.status"
+    hb = status_dir / f"{role}.hb"
 
     def run(cmd, compacted: bool = False):
         try:
             busy.write_text("processing")           # live beacon: claude running
         except OSError:
             pass
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        # keepalive: a claude run blocks the react loop, so without this the heartbeat
+        # + 'processing' beacon go stale and the monitor wrongly shows the agent offline
+        # on any run longer than ~3min. Refresh both every few seconds until it returns.
+        stop = threading.Event()
+
+        def keepalive():
+            while not stop.wait(6):
+                try:
+                    busy.write_text("processing")
+                    hb.write_text(str(time.time()))
+                except OSError:
+                    pass
+        ka = threading.Thread(target=keepalive, daemon=True)
+        ka.start()
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            stop.set()
         edited = False
         try:
             d = json.loads(r.stdout or "{}")
