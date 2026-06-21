@@ -15,6 +15,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from agentctl import heartbeat
+
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
     '`agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox '
@@ -42,18 +44,31 @@ def drive_once(role: str, runner) -> None:
     runner(claude_cmd(role))
 
 
+def heartbeat_path(wake_dir, role: str) -> Path:
+    """Per-role liveness file, kept beside the wake dir so the monitor and any
+    observer can find it without extra config."""
+    return Path(wake_dir).parent / "heartbeats" / f"{role}.hb"
+
+
 def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
                max_iters: int | None = None) -> int:
     """Watch for wakes and drive the role on each. Returns the number of drives.
 
     `runner` defaults to subprocess.run; `max_iters` bounds the loop for tests
-    (None = run forever)."""
+    (None = run forever). Emits a liveness heartbeat every iteration (even while
+    idle) so observers can distinguish 'reactor alive' from 'bus alive'."""
     if runner is None:
         runner = lambda cmd: subprocess.run(cmd, check=False)
+    hb = heartbeat_path(wake_dir, role)
+    hb.parent.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
     drives = 0
     i = 0
     while max_iters is None or i < max_iters:
+        try:
+            heartbeat.emit(hb, time.time())  # best-effort liveness beacon
+        except OSError:
+            pass
         if pending_wakes(wake_dir, role, seen):
             drive_once(role, runner)
             drives += 1
