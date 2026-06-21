@@ -18,8 +18,12 @@ Run it like the other fleet daemons: `python -m librarian.daemon` with env paths
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
+
+# ensure the repo's own agentctl/librarian win over any pip-installed shadow copy
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agentctl import store
 from librarian import cabinet, distill, relevance
