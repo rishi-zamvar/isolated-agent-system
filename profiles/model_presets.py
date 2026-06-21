@@ -23,10 +23,12 @@ PRESETS: dict[str, dict[str, str]] = {
     "all-opus": {r: OPUS for r in ROLES},
 
     # DEFAULT — deep where a miss is expensive (apex-skeptic, architecture, security,
-    # adversarial verify, hardest implementation), cheap where work is structured.
+    # adversarial verify), cheap for implementation (Sonnet is excellent at code).
+    # BE moved OPUS->SONNET: it was the costliest agent and was the only implementer
+    # left on Opus; live data showed ~82% of spend was Opus, BE the biggest slice.
     "standard": {
-        "orch": OPUS, "tl": OPUS, "sec": OPUS, "qa": OPUS, "be": OPUS,
-        "pm": SONNET, "fe": SONNET, "plat": SONNET,
+        "orch": OPUS, "tl": OPUS, "sec": OPUS, "qa": OPUS,
+        "be": SONNET, "pm": SONNET, "fe": SONNET, "plat": SONNET,
     },
 
     # Cost/latency-first — keep the apex skeptic + security sharp, rest on Sonnet.
