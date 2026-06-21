@@ -80,6 +80,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["solo deploy without the head's GoDecision"],
         supervisor="orch",
         is_worker=True,
+        writes_code=True,
         perms=_worker_perms(["Bash(*deploy*)", "Bash(kubectl apply:*)"]),
     ),
     "be": RoleSpec(
@@ -130,6 +131,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["merge own PR without peer review", "deploy without ORCH GoDecision"],
         supervisor="tl",
         is_worker=True,
+        writes_code=True,
         perms=_worker_perms(["Bash(gh pr merge:*)"]),  # deploy allowed but only on GoDecision (enforced by gating + CLAUDE.md)
     ),
     "qa": RoleSpec(
@@ -158,6 +160,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["execute access changes directly (recommends; PLAT executes)"],
         supervisor="tl",
         is_worker=True,
+        writes_code=True,
         perms=_worker_perms(["Bash(icacls:*)", "Bash(chmod:*)", "Bash(*deploy*)"]),
     ),
 }
