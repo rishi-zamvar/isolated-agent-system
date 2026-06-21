@@ -21,6 +21,25 @@ from pathlib import Path
 from agentctl import heartbeat
 from profiles.model_presets import model_for
 
+# the agents work in this repo; a change to its git tree across a run = "edited code"
+# (the only reliable signal — `claude -p --output-format json` omits tool calls).
+_WORKREPO = os.environ.get("AGENT_WORKREPO") or os.getcwd()
+
+
+def _ws_sig(repo: str):
+    """A cheap signature of the workspace git state (HEAD + dirty set). None if not a
+    git repo. Comparing before/after a run detects whether the agent changed code."""
+    try:
+        head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                              capture_output=True, text=True, timeout=8)
+        if head.returncode != 0:
+            return None
+        porc = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                              capture_output=True, text=True, timeout=8)
+        return head.stdout.strip() + "\n" + porc.stdout
+    except Exception:
+        return None
+
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
     '`agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox '
@@ -119,13 +138,18 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                     hb.write_text(str(time.time()))
                 except OSError:
                     pass
+        sig0 = _ws_sig(_WORKREPO)                     # workspace state before the run
         ka = threading.Thread(target=keepalive, daemon=True)
         ka.start()
         try:
             r = subprocess.run(cmd, capture_output=True, text=True)
         finally:
             stop.set()
-        edited = False
+        # "made edits" = the agent changed the workspace git tree during the run.
+        # This is the reliable signal; the JSON-string check is a weak fallback.
+        sig1 = _ws_sig(_WORKREPO)
+        git_edited = sig0 is not None and sig1 is not None and sig0 != sig1
+        edited = git_edited                          # default; JSON heuristic may also set it
         try:
             d = json.loads(r.stdout or "{}")
             u = d.get("usage") or {}
@@ -135,10 +159,9 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                     session_path(status_dir, role).write_text(sid, encoding="utf-8")
                 except OSError:
                     pass
-            # "made edits" = the run used a file-mutating tool
             text = json.dumps(d)
-            edited = ('"Edit"' in text or '"Write"' in text or '"NotebookEdit"' in text
-                      or '"MultiEdit"' in text)
+            edited = git_edited or ('"Edit"' in text or '"Write"' in text
+                                    or '"NotebookEdit"' in text or '"MultiEdit"' in text)
             in_fresh = u.get("input_tokens") or 0
             in_cache = u.get("cache_read_input_tokens") or 0
             rec = {"role": role,
