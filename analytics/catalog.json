@@ -284,5 +284,90 @@
     "display": "kpi",
     "insight": { "warn_if": "< 1", "warn_msg": "Zero recalls — filed context is not being retrieved. Check recall integration." },
     "source": "librarian.recall.count"
+  },
+  {
+    "key": "librarian_removed_tokens",
+    "category": "Librarian",
+    "label": "Tokens Removed",
+    "unit": "tokens",
+    "definition": "Total tokens removed from context by the Librarian agent across all compaction events in this session.",
+    "so_what": "More removed tokens with high precision means the Librarian is trimming efficiently — correct things removed. High removed_tokens with low precision signals over-snipping: wrong content is being cut, forcing future recalls.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "== 0",
+      "good_if": "> 0"
+    },
+    "source": "librarian.relevance_efficiency.removed_tokens"
+  },
+  {
+    "key": "librarian_recalls",
+    "category": "Librarian",
+    "label": "Recalls",
+    "unit": "count",
+    "definition": "Total number of recall events triggered during this session — each recall means a previously snipped context item was needed again.",
+    "so_what": "A recall is a MISS: the Librarian removed something that was subsequently needed. High recall count means context was over-snipped — wrong things removed. Zero recalls is optimal.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0",
+      "good_if": "== 0"
+    },
+    "source": "librarian.relevance_efficiency.recalls"
+  },
+  {
+    "key": "librarian_recalls_per_compaction",
+    "category": "Librarian",
+    "label": "Recalls / Compaction",
+    "unit": "ratio",
+    "definition": "Average recalls per compaction event: total recalls divided by total compactions.",
+    "so_what": "Normalises recall rate to compaction volume. A rising ratio means the Librarian is systematically snipping relevant content — not a one-off miss but a pattern. Near zero is healthy.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0.1",
+      "good_if": "== 0"
+    },
+    "source": "librarian.relevance_efficiency.recalls_per_compaction"
+  },
+  {
+    "key": "librarian_precision",
+    "category": "Librarian",
+    "label": "Precision",
+    "unit": "ratio",
+    "definition": "Fraction of removed tokens that were correctly removed (not subsequently recalled): precision = 1 - (recalled_tokens / removed_tokens).",
+    "so_what": "Precision is the Librarian quality score. 1.0 = perfect — nothing removed was needed again. Below 0.85 = context over-snipped: wrong things cut, forcing recalls that add latency and token cost.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.85",
+      "good_if": ">= 0.9"
+    },
+    "source": "librarian.relevance_efficiency.precision"
+  },
+  {
+    "key": "librarian_recalls_by_role",
+    "category": "Librarian",
+    "label": "Recalls by Role",
+    "unit": "count",
+    "definition": "Per-agent recall counts: how many recalls each agent role triggered during this session.",
+    "so_what": "Surfaces which agents are driving recalls. An agent with disproportionately high recall count indicates its working context is being over-snipped — the Librarian may be misclassifying that agent's relevant content as removable.",
+    "display": "bar",
+    "insight": {
+      "warn_if": "> 0",
+      "good_if": "== 0",
+      "warn_msg": "One or more agent roles triggered recalls — check per-role breakdown for outliers"
+    },
+    "source": "librarian.recall_stats.by_role"
+  },
+  {
+    "key": "librarian_ideal",
+    "category": "Librarian",
+    "label": "Ideal Mode",
+    "unit": "count",
+    "definition": "Indicator of ideal Librarian operation: 1 when precision >= 0.9 and removed_tokens > 0; 0 otherwise. Re-modelled from boolean (cabinet.py:339) as count 0/1.",
+    "so_what": "Ideal mode = high removed_tokens AND precision >= 0.9. Confirms the Librarian is aggressively and accurately pruning context. When 0: either pruning too conservative (low removed_tokens) or too imprecise (precision < 0.9).",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "== 0",
+      "good_if": "== 1"
+    },
+    "source": "librarian.relevance_efficiency.ideal"
   }
 ]
