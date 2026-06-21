@@ -5,20 +5,27 @@
     "label": "cache-hit",
     "unit": "percent",
     "definition": "Share of input tokens served from the prompt cache rather than billed at the full fresh-input rate.",
-    "so_what": "Below 25 % means sessions run cold — every un-cached token costs 5–10× more than a warm hit. The single biggest lever on total API spend.",
-    "display": "kpi",
-    "insight": { "warn_if": "< 0.25", "good_if": "> 0.6", "warn_msg": "Sessions running cold — warm them to cut input cost." },
-    "source": "economy.cache_hit"
+    "so_what": "Below 25% means sessions run cold \u2014 every un-cached token costs 5\u201310\u00d7 more than a warm hit. The single biggest lever on total API spend. The trend shows whether warming is working.",
+    "display": "timeseries",
+    "insight": {
+      "warn_if": "< 0.25",
+      "good_if": "> 0.6",
+      "warn_msg": "Sessions running cold \u2014 warm them to cut input cost."
+    },
+    "source": "economy.cache_hit_series"
   },
   {
     "key": "burn_usd_per_hr",
     "category": "Token Economy",
     "label": "burn $/hr",
     "unit": "usd",
-    "definition": "Total API cost divided by observed session span in hours — the fleet's live run rate.",
+    "definition": "Total API cost divided by observed session span in hours \u2014 the fleet's live run rate.",
     "so_what": "Tracks runway against usage limits. Spikes signal a runaway agent or an unexpectedly large cold-cache context.",
     "display": "kpi",
-    "insight": { "warn_if": "> 5", "warn_msg": "Burn rate elevated — check for runaway runs or cold-cache sessions." },
+    "insight": {
+      "warn_if": "> 5",
+      "warn_msg": "Burn rate elevated \u2014 check for runaway runs or cold-cache sessions."
+    },
     "source": "economy.burn.usd_per_hr"
   },
   {
@@ -26,10 +33,14 @@
     "category": "Token Economy",
     "label": "idle-run %",
     "unit": "percent",
-    "definition": "Percentage of runs that produced no file edit — context re-reads with no committed output.",
-    "so_what": "High idle-run % means agents burn tokens without advancing work. Prime target for better event-driven wake scheduling (NORMS §2).",
+    "definition": "Percentage of runs that produced no file edit \u2014 context re-reads with no committed output.",
+    "so_what": "High idle-run % means agents burn tokens without advancing work. Prime target for better event-driven wake scheduling (NORMS \u00a72).",
     "display": "gauge",
-    "insight": { "warn_if": "> 40", "good_if": "< 15", "warn_msg": "Too many idle runs — agents may be polling or waking on noise." },
+    "insight": {
+      "warn_if": "> 40",
+      "good_if": "< 15",
+      "warn_msg": "Too many idle runs \u2014 agents may be polling or waking on noise."
+    },
     "source": "economy.waste.no_edit_pct"
   },
   {
@@ -40,7 +51,10 @@
     "definition": "Percentage of total token spend going to the Haiku tier (cheapest model).",
     "so_what": "Low Haiku % means lightweight tasks are escalating to expensive tiers unnecessarily. Routine tasks should run on Haiku; heavy reasoning on Opus.",
     "display": "donut",
-    "insight": { "warn_if": "< 20", "warn_msg": "Low Haiku usage — lightweight tasks may be over-tiered." },
+    "insight": {
+      "warn_if": "< 20",
+      "warn_msg": "Low Haiku usage \u2014 lightweight tasks may be over-tiered."
+    },
     "source": "economy.model_mix.haiku.pct"
   },
   {
@@ -51,7 +65,10 @@
     "definition": "Output tokens generated per input token consumed. Measures how much agents write relative to what they read.",
     "so_what": "Very high verbosity bloats the context window and drives up cost on the next turn. Low verbosity usually means terse, efficient agents.",
     "display": "kpi",
-    "insight": { "warn_if": "> 0.8", "warn_msg": "Agents generating excessive output — future context and cost will balloon." },
+    "insight": {
+      "warn_if": "> 0.8",
+      "warn_msg": "Agents generating excessive output \u2014 future context and cost will balloon."
+    },
     "source": "economy.verbosity"
   },
   {
@@ -62,7 +79,11 @@
     "definition": "Percentage of bus messages that are pure coordination overhead (ACK, STATUS, NUDGE, PING, NOTE, FreeText) rather than substantive typed artifacts.",
     "so_what": "High coordination % means the bus is congested with meta-chatter. Every coordination message is cost and latency with no product shipped.",
     "display": "gauge",
-    "insight": { "warn_if": "> 50", "good_if": "< 25", "warn_msg": "Over half of bus traffic is coordination overhead — look for ACK storms or polling loops." },
+    "insight": {
+      "warn_if": "> 50",
+      "good_if": "< 25",
+      "warn_msg": "Over half of bus traffic is coordination overhead \u2014 look for ACK storms or polling loops."
+    },
     "source": "flow.coordination.coord_pct"
   },
   {
@@ -71,9 +92,13 @@
     "label": "hub Gini",
     "unit": "ratio",
     "definition": "Gini coefficient of outbound message volume across roles. 0 = all roles equally active; 1 = one role sends everything.",
-    "so_what": "High Gini flags a hub bottleneck — one role acting as traffic concentrator slows the whole fleet whenever it is busy or blocked.",
+    "so_what": "High Gini flags a hub bottleneck \u2014 one role acting as traffic concentrator slows the whole fleet whenever it is busy or blocked.",
     "display": "kpi",
-    "insight": { "warn_if": "> 0.6", "good_if": "< 0.35", "warn_msg": "Bus traffic highly concentrated — one role is a bottleneck." },
+    "insight": {
+      "warn_if": "> 0.6",
+      "good_if": "< 0.35",
+      "warn_msg": "Bus traffic highly concentrated \u2014 one role is a bottleneck."
+    },
     "source": "flow.hub_gini"
   },
   {
@@ -81,10 +106,14 @@
     "category": "Flow",
     "label": "handoff p90",
     "unit": "ms",
-    "definition": "90th-percentile delay between a message being sent and first read — the tail queue latency on the bus.",
+    "definition": "90th-percentile delay between a message being sent and first read \u2014 the tail queue latency on the bus.",
     "so_what": "Long p90 handoff means messages pile up unread. This is the coordination tax agents pay while waiting for a reply to unblock their next action.",
     "display": "kpi",
-    "insight": { "warn_if": "> 30000", "good_if": "< 5000", "warn_msg": "Tail handoff latency high — agents waiting too long for replies." },
+    "insight": {
+      "warn_if": "> 30000",
+      "good_if": "< 5000",
+      "warn_msg": "Tail handoff latency high \u2014 agents waiting too long for replies."
+    },
     "source": "flow.handoff.p90_ms"
   },
   {
@@ -93,9 +122,12 @@
     "label": "avg cycle",
     "unit": "ms",
     "definition": "Average time from first to last message on a ticket thread (correlation_id group) in milliseconds.",
-    "so_what": "Long average cycle time means tickets take many turns to resolve — caused by rework, handoff delays, or stuck challenges.",
+    "so_what": "Long average cycle time means tickets take many turns to resolve \u2014 caused by rework, handoff delays, or stuck challenges.",
     "display": "kpi",
-    "insight": { "warn_if": "> 1800000", "warn_msg": "Tickets averaging over 30 min — check for rework or stuck handoffs." },
+    "insight": {
+      "warn_if": "> 1800000",
+      "warn_msg": "Tickets averaging over 30 min \u2014 check for rework or stuck handoffs."
+    },
     "source": "flow.cycle_time.avg_ms"
   },
   {
@@ -103,10 +135,13 @@
     "category": "Flow",
     "label": "queue depth",
     "unit": "count",
-    "definition": "Depth of the deepest unread inbox — the number of messages waiting in the busiest blocked role's queue.",
+    "definition": "Depth of the deepest unread inbox \u2014 the number of messages waiting in the busiest blocked role's queue.",
     "so_what": "Rising queue depth on a single role is the first signal that an agent is stuck, slow, or ignoring its inbox.",
     "display": "kpi",
-    "insight": { "warn_if": "> 5", "warn_msg": "A role has a deep unread queue — agent may be stuck or idle." },
+    "insight": {
+      "warn_if": "> 5",
+      "warn_msg": "A role has a deep unread queue \u2014 agent may be stuck or idle."
+    },
     "source": "flow.bottleneck.depth"
   },
   {
@@ -114,10 +149,13 @@
     "category": "Flow",
     "label": "rework events",
     "unit": "count",
-    "definition": "Total REVISED + CHALLENGE + REJECT + ESCALATE events on the bus — the aggregate rework signal.",
+    "definition": "Total REVISED + CHALLENGE + REJECT + ESCALATE events on the bus \u2014 the aggregate rework signal.",
     "so_what": "Each rework event is a failed first-pass. High rework drives up cycle time, API cost, and coordination overhead.",
     "display": "bar",
-    "insight": { "warn_if": "> 10", "warn_msg": "High rework — check AC clarity, TDD discipline, and first-pass quality." },
+    "insight": {
+      "warn_if": "> 10",
+      "warn_msg": "High rework \u2014 check AC clarity, TDD discipline, and first-pass quality."
+    },
     "source": "flow.rework.total"
   },
   {
@@ -125,10 +163,14 @@
     "category": "Zero-Bloat",
     "label": "zero-bloat score",
     "unit": "count",
-    "definition": "0–100 composite of code permanence, low file thrash, healthy test ratio, zero dep growth, and compact diff size. 100 = leanest.",
-    "so_what": "Below 60 means the codebase is accumulating dead rewrites, bloated diffs, or dependency sprawl — direct NORMS §1 violations.",
+    "definition": "0\u2013100 composite of code permanence, low file thrash, healthy test ratio, zero dep growth, and compact diff size. 100 = leanest.",
+    "so_what": "Below 60 means the codebase is accumulating dead rewrites, bloated diffs, or dependency sprawl \u2014 direct NORMS \u00a71 violations.",
     "display": "gauge",
-    "insight": { "warn_if": "< 60", "good_if": "> 80", "warn_msg": "Zero-bloat score low — check for thrash, dep growth, or thin test ratio." },
+    "insight": {
+      "warn_if": "< 60",
+      "good_if": "> 80",
+      "warn_msg": "Zero-bloat score low \u2014 check for thrash, dep growth, or thin test ratio."
+    },
     "source": "bloat.score"
   },
   {
@@ -137,9 +179,12 @@
     "label": "dep lines added",
     "unit": "count",
     "definition": "Lines added to dependency manifests (requirements.txt, package.json, pyproject.toml, etc.) in recent commits.",
-    "so_what": "Every dep line is a new external surface and a future upgrade burden. NORMS §1 mandates justifying each new dependency.",
+    "so_what": "Every dep line is a new external surface and a future upgrade burden. NORMS \u00a71 mandates justifying each new dependency.",
     "display": "kpi",
-    "insight": { "warn_if": "> 0", "warn_msg": "New dependency added — confirm it's justified and no stdlib alternative exists." },
+    "insight": {
+      "warn_if": "> 0",
+      "warn_msg": "New dependency added \u2014 confirm it's justified and no stdlib alternative exists."
+    },
     "source": "bloat.dep_growth"
   },
   {
@@ -148,9 +193,13 @@
     "label": "test:code ratio",
     "unit": "ratio",
     "definition": "Lines added to test files divided by lines added to non-test code in recent commits.",
-    "so_what": "Below 0.5 means more code shipped than test coverage — a TDD deficit. NORMS §3: failing test before logic, always.",
+    "so_what": "Below 0.5 means more code shipped than test coverage \u2014 a TDD deficit. NORMS \u00a73: failing test before logic, always.",
     "display": "bar",
-    "insight": { "warn_if": "< 0.5", "good_if": "> 0.75", "warn_msg": "Test coverage lagging — new code outpacing tests." },
+    "insight": {
+      "warn_if": "< 0.5",
+      "good_if": "> 0.75",
+      "warn_msg": "Test coverage lagging \u2014 new code outpacing tests."
+    },
     "source": "bloat.test_ratio"
   },
   {
@@ -158,10 +207,14 @@
     "category": "Zero-Bloat",
     "label": "file thrash",
     "unit": "ratio",
-    "definition": "Fraction of touched files that were modified in more than one commit in recent history — the rewrite/rework noise signal.",
-    "so_what": "High thrash means the same files are rewritten repeatedly. This is wasted churn that NORMS §1 targets: get it right the first time.",
+    "definition": "Fraction of touched files that were modified in more than one commit in recent history \u2014 the rewrite/rework noise signal.",
+    "so_what": "High thrash means the same files are rewritten repeatedly. This is wasted churn that NORMS \u00a71 targets: get it right the first time.",
     "display": "gauge",
-    "insight": { "warn_if": "> 0.4", "good_if": "< 0.15", "warn_msg": "High file thrash — many files rewritten multiple times recently." },
+    "insight": {
+      "warn_if": "> 0.4",
+      "good_if": "< 0.15",
+      "warn_msg": "High file thrash \u2014 many files rewritten multiple times recently."
+    },
     "source": "bloat.thrash.frac"
   },
   {
@@ -169,10 +222,13 @@
     "category": "Zero-Bloat",
     "label": "diff churn",
     "unit": "count",
-    "definition": "Total lines added plus deleted across recent commits — the raw diff size signal.",
-    "so_what": "Large diffs are harder to review, more likely to hide bugs, and more expensive to revert. Smaller, focused changes are the NORMS §1 target.",
+    "definition": "Total lines added plus deleted across recent commits \u2014 the raw diff size signal.",
+    "so_what": "Large diffs are harder to review, more likely to hide bugs, and more expensive to revert. Smaller, focused changes are the NORMS \u00a71 target.",
     "display": "bar",
-    "insight": { "warn_if": "> 500", "warn_msg": "Large diff — consider splitting the change into focused units." },
+    "insight": {
+      "warn_if": "> 500",
+      "warn_msg": "Large diff \u2014 consider splitting the change into focused units."
+    },
     "source": "bloat.churn"
   },
   {
@@ -180,10 +236,14 @@
     "category": "IJW",
     "label": "IJW score",
     "unit": "count",
-    "definition": "0–100 composite of one-shot success rate, cache-hit, zero-bloat score, and low rework. The headline 'it just works' signal for the fleet.",
-    "so_what": "The single number that proves the fleet is working correctly and efficiently. Below 60 means something systemic is wrong — the sub-metrics show where.",
+    "definition": "0\u2013100 composite of one-shot success rate, cache-hit, zero-bloat score, and low rework. The headline 'it just works' signal for the fleet.",
+    "so_what": "The single number that proves the fleet is working correctly and efficiently. Below 60 means something systemic is wrong \u2014 the sub-metrics show where.",
     "display": "kpi",
-    "insight": { "warn_if": "< 60", "good_if": "> 80", "warn_msg": "IJW score low — check one-shot rate, cache-hit, and rework count." },
+    "insight": {
+      "warn_if": "< 60",
+      "good_if": "> 80",
+      "warn_msg": "IJW score low \u2014 check one-shot rate, cache-hit, and rework count."
+    },
     "source": "ijw.score"
   },
   {
@@ -191,10 +251,14 @@
     "category": "IJW",
     "label": "one-shot %",
     "unit": "percent",
-    "definition": "Percentage of ticket threads that closed with zero rework events — no REVISED, CHALLENGE, REJECT, or ESCALATE.",
+    "definition": "Percentage of ticket threads that closed with zero rework events \u2014 no REVISED, CHALLENGE, REJECT, or ESCALATE.",
     "so_what": "The cleanest proof that agents get it right first time. Low one-shot rate is expensive: each retry pays context re-read cost plus API cost.",
     "display": "kpi",
-    "insight": { "warn_if": "< 50", "good_if": "> 80", "warn_msg": "Over half of tickets needed rework — first-pass quality is low." },
+    "insight": {
+      "warn_if": "< 50",
+      "good_if": "> 80",
+      "warn_msg": "Over half of tickets needed rework \u2014 first-pass quality is low."
+    },
     "source": "ijw.one_shot.rate"
   },
   {
@@ -205,7 +269,11 @@
     "definition": "Percentage of bus traffic that flowed agent-to-agent without a human-in-the-loop message or CONVERSE event.",
     "so_what": "High autonomy means the fleet self-coordinates. Low autonomy signals excessive human intervention or agents that can't proceed without hand-holding.",
     "display": "kpi",
-    "insight": { "warn_if": "< 70", "good_if": "> 90", "warn_msg": "Low autonomy — humans intervening frequently. Check for stuck agents or trust gaps." },
+    "insight": {
+      "warn_if": "< 70",
+      "good_if": "> 90",
+      "warn_msg": "Low autonomy \u2014 humans intervening frequently. Check for stuck agents or trust gaps."
+    },
     "source": "ijw.autonomy"
   },
   {
@@ -213,10 +281,13 @@
     "category": "IJW",
     "label": "$/ticket",
     "unit": "usd",
-    "definition": "Total API cost divided by number of resolved ticket threads — the unit economics of fleet output.",
+    "definition": "Total API cost divided by number of resolved ticket threads \u2014 the unit economics of fleet output.",
     "so_what": "Rising $/ticket is the early warning that rework, idle runs, or cold cache is eroding leverage. The trend matters more than the absolute value.",
     "display": "kpi",
-    "insight": { "warn_if": "> 2", "warn_msg": "High cost per ticket — investigate rework, cold-cache, or runaway runs." },
+    "insight": {
+      "warn_if": "> 2",
+      "warn_msg": "High cost per ticket \u2014 investigate rework, cold-cache, or runaway runs."
+    },
     "source": "ijw.cost_per_outcome.per_ticket"
   },
   {
@@ -225,9 +296,12 @@
     "label": "open CC violations",
     "unit": "count",
     "definition": "Count of functions currently exceeding the cyclomatic complexity ceiling (CC > 10), as detected by the Optimizer agent on merge.",
-    "so_what": "Each violation is complexity debt. NORMS §1: optimal complexity is the bar. Open violations mean real risk of bugs hiding in hard-to-test high-CC paths.",
+    "so_what": "Each violation is complexity debt. NORMS \u00a71: optimal complexity is the bar. Open violations mean real risk of bugs hiding in hard-to-test high-CC paths.",
     "display": "kpi",
-    "insight": { "warn_if": "> 0", "warn_msg": "Open complexity violations — extract helpers to reduce CC to ≤10." },
+    "insight": {
+      "warn_if": "> 0",
+      "warn_msg": "Open complexity violations \u2014 extract helpers to reduce CC to \u226410."
+    },
     "source": "optimizer.open_count"
   },
   {
@@ -235,10 +309,13 @@
     "category": "Quality",
     "label": "challenge rate",
     "unit": "ratio",
-    "definition": "Fleet-average share of ReviewVerdict messages that are CHALLENGE events — the critical review signal.",
-    "so_what": "Near-zero challenge rate is a rubber-stamp smell (NORMS §3 verify duty). Sustained high rate means recurring upstream quality issues.",
+    "definition": "Fleet-average share of ReviewVerdict messages that are CHALLENGE events \u2014 the critical review signal.",
+    "so_what": "Near-zero challenge rate is a rubber-stamp smell (NORMS \u00a73 verify duty). Sustained high rate means recurring upstream quality issues.",
     "display": "gauge",
-    "insight": { "warn_if": "< 0.05", "warn_msg": "Challenge rate very low — verify duty may not be active. Near-zero is the rubber-stamp smell." },
+    "insight": {
+      "warn_if": "< 0.05",
+      "warn_msg": "Challenge rate very low \u2014 verify duty may not be active. Near-zero is the rubber-stamp smell."
+    },
     "source": "quality.challenge_rate"
   },
   {
@@ -246,10 +323,14 @@
     "category": "Quality",
     "label": "cited accepts %",
     "unit": "percent",
-    "definition": "Share of ACCEPT verdicts that recorded a non-empty verified[] list — proof that the reviewer reproduced the claim.",
+    "definition": "Share of ACCEPT verdicts that recorded a non-empty verified[] list \u2014 proof that the reviewer reproduced the claim.",
     "so_what": "Unverified accepts (empty verified[]) are bare approvals, which PM discipline forbids. Low % means reviews are cursory, not reproductive.",
     "display": "kpi",
-    "insight": { "warn_if": "< 80", "good_if": "> 95", "warn_msg": "Many accepts lack evidence. Per norms: no bare approvals — empty verified[] is a defect." },
+    "insight": {
+      "warn_if": "< 80",
+      "good_if": "> 95",
+      "warn_msg": "Many accepts lack evidence. Per norms: no bare approvals \u2014 empty verified[] is a defect."
+    },
     "source": "quality.accept_with_verification"
   },
   {
@@ -257,10 +338,14 @@
     "category": "Librarian",
     "label": "context saved",
     "unit": "tokens",
-    "definition": "Total input tokens removed by Librarian compaction across all agents — the cumulative working-set reduction.",
+    "definition": "Total input tokens removed by Librarian compaction across all agents \u2014 the cumulative working-set reduction.",
     "so_what": "Every token the Librarian removes is a token not re-billed on the next turn. This directly reduces burn rate and improves cache-hit ratio.",
     "display": "kpi",
-    "insight": { "warn_if": "< 1000", "good_if": "> 10000", "warn_msg": "Librarian saving few tokens — agents may not be compacting or the daemon is idle." },
+    "insight": {
+      "warn_if": "< 1000",
+      "good_if": "> 10000",
+      "warn_msg": "Librarian saving few tokens \u2014 agents may not be compacting or the daemon is idle."
+    },
     "source": "librarian.compaction.tokens_saved"
   },
   {
@@ -269,9 +354,13 @@
     "label": "snipped %",
     "unit": "percent",
     "definition": "Share of episodic context spans that were filed to the cabinet (snipped) rather than kept in the active working set.",
-    "so_what": "Low snipped % means agents are carrying bloated histories. The Librarian exists to keep the working set lean — if it's not snipping, contexts bloat.",
+    "so_what": "Low snipped % means agents are carrying bloated histories. The Librarian exists to keep the working set lean \u2014 if it's not snipping, contexts bloat.",
     "display": "gauge",
-    "insight": { "warn_if": "< 10", "good_if": "> 40", "warn_msg": "Librarian snipping little — agents may be carrying unnecessarily large contexts." },
+    "insight": {
+      "warn_if": "< 10",
+      "good_if": "> 40",
+      "warn_msg": "Librarian snipping little \u2014 agents may be carrying unnecessarily large contexts."
+    },
     "source": "librarian.selections.snipped_pct"
   },
   {
@@ -279,10 +368,13 @@
     "category": "Librarian",
     "label": "context recalls",
     "unit": "count",
-    "definition": "Number of context recall lookups the Librarian has served — how often agents retrieve previously filed context.",
-    "so_what": "Low recall count with high compaction means the Librarian is filing but nothing is being retrieved — recall pathways may be underused or broken.",
+    "definition": "Number of context recall lookups the Librarian has served \u2014 how often agents retrieve previously filed context.",
+    "so_what": "Low recall count with high compaction means the Librarian is filing but nothing is being retrieved \u2014 recall pathways may be underused or broken.",
     "display": "kpi",
-    "insight": { "warn_if": "< 1", "warn_msg": "Zero recalls — filed context is not being retrieved. Check recall integration." },
+    "insight": {
+      "warn_if": "< 1",
+      "warn_msg": "Zero recalls \u2014 filed context is not being retrieved. Check recall integration."
+    },
     "source": "librarian.recall.count"
   },
   {
@@ -291,7 +383,7 @@
     "label": "Tokens Removed",
     "unit": "tokens",
     "definition": "Total tokens removed from context by the Librarian agent across all compaction events in this session.",
-    "so_what": "More removed tokens with high precision means the Librarian is trimming efficiently — correct things removed. High removed_tokens with low precision signals over-snipping: wrong content is being cut, forcing future recalls.",
+    "so_what": "More removed tokens with high precision means the Librarian is trimming efficiently \u2014 correct things removed. High removed_tokens with low precision signals over-snipping: wrong content is being cut, forcing future recalls.",
     "display": "kpi",
     "insight": {
       "warn_if": "== 0",
@@ -304,8 +396,8 @@
     "category": "Librarian",
     "label": "Recalls",
     "unit": "count",
-    "definition": "Total number of recall events triggered during this session — each recall means a previously snipped context item was needed again.",
-    "so_what": "A recall is a MISS: the Librarian removed something that was subsequently needed. High recall count means context was over-snipped — wrong things removed. Zero recalls is optimal.",
+    "definition": "Total number of recall events triggered during this session \u2014 each recall means a previously snipped context item was needed again.",
+    "so_what": "A recall is a MISS: the Librarian removed something that was subsequently needed. High recall count means context was over-snipped \u2014 wrong things removed. Zero recalls is optimal.",
     "display": "kpi",
     "insight": {
       "warn_if": "> 0",
@@ -319,7 +411,7 @@
     "label": "Recalls / Compaction",
     "unit": "ratio",
     "definition": "Average recalls per compaction event: total recalls divided by total compactions.",
-    "so_what": "Normalises recall rate to compaction volume. A rising ratio means the Librarian is systematically snipping relevant content — not a one-off miss but a pattern. Near zero is healthy.",
+    "so_what": "Normalises recall rate to compaction volume. A rising ratio means the Librarian is systematically snipping relevant content \u2014 not a one-off miss but a pattern. Near zero is healthy.",
     "display": "kpi",
     "insight": {
       "warn_if": "> 0.1",
@@ -333,7 +425,7 @@
     "label": "Precision",
     "unit": "ratio",
     "definition": "Fraction of removed tokens that were correctly removed (not subsequently recalled): precision = 1 - (recalled_tokens / removed_tokens).",
-    "so_what": "Precision is the Librarian quality score. 1.0 = perfect — nothing removed was needed again. Below 0.85 = context over-snipped: wrong things cut, forcing recalls that add latency and token cost.",
+    "so_what": "Precision is the Librarian quality score. 1.0 = perfect \u2014 nothing removed was needed again. Below 0.85 = context over-snipped: wrong things cut, forcing recalls that add latency and token cost.",
     "display": "kpi",
     "insight": {
       "warn_if": "< 0.85",
@@ -347,12 +439,12 @@
     "label": "Recalls by Role",
     "unit": "count",
     "definition": "Per-agent recall counts: how many recalls each agent role triggered during this session.",
-    "so_what": "Surfaces which agents are driving recalls. An agent with disproportionately high recall count indicates its working context is being over-snipped — the Librarian may be misclassifying that agent's relevant content as removable.",
+    "so_what": "Surfaces which agents are driving recalls. An agent with disproportionately high recall count indicates its working context is being over-snipped \u2014 the Librarian may be misclassifying that agent's relevant content as removable.",
     "display": "bar",
     "insight": {
       "warn_if": "> 0",
       "good_if": "== 0",
-      "warn_msg": "One or more agent roles triggered recalls — check per-role breakdown for outliers"
+      "warn_msg": "One or more agent roles triggered recalls \u2014 check per-role breakdown for outliers"
     },
     "source": "librarian.recall_stats.by_role"
   },
