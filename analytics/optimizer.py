@@ -1,6 +1,6 @@
 """Optimizer agent #22 — event-driven code-quality scan (WS2, TL design).
 
-Triggered on merge (not polling). Reuses gates.complexity and analytics.bloat.
+Triggered on merge (not polling). Reuses gates.complexity.
 For each changed .py file over the CC ceiling, emits a Remediation finding.
 
 Remediation payload satisfies proof.OBLIGATIONS:
