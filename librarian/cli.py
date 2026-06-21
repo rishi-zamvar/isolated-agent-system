@@ -10,9 +10,16 @@ of carrying that context every turn. Pull it back only when needed, then forget 
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 from librarian import cabinet
+
+# archived spans can contain non-ASCII; never let a console encoding crash a recall
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 
 def _default_cabinet() -> Path:
