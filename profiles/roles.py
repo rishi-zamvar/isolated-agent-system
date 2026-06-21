@@ -22,9 +22,16 @@ class RoleSpec:
     model: str = "claude-opus-4-8"  # v1.1 go-live: Opus (was sonnet for MVP)
 
 
+# Production protection — the hard guardrail every worker carries (enforced even in bypass
+# mode): NO worker pushes to main or deploys directly. Those happen ONLY via ORCH's
+# GoDecision gate (ORCH lands deploys after the review chain). Applied to all workers below.
+_PROD_DENY = ["Bash(git push:* main)", "Bash(git push origin main:*)",
+              "Bash(git push:*main*)", "Bash(*deploy*)", "Bash(kubectl apply:*)"]
+
+
 # Worker autonomy: no per-command prompts inside the lane; deny list is the hard guardrail.
 def _worker_perms(deny: list[str]) -> dict:
-    return {"defaultMode": "bypassPermissions", "deny": deny}
+    return {"defaultMode": "bypassPermissions", "deny": _PROD_DENY + deny}
 
 
 # Target share of an agent's tool-runs that should be CODE EDITS — the "stay in your lane"
@@ -104,7 +111,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["write code", "set architecture", "repo source write", "production access"],
         supervisor="orch",
         is_worker=True,
-        perms=_worker_perms(["Bash(git push:*)", "Bash(*deploy*)", "Edit(src/**)", "Write(src/**)"]),
+        perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
     ),
     "tl": RoleSpec(
         title="TL — Tech Lead / Engineering Manager (the how and the who)",
@@ -122,7 +129,7 @@ ROLES: dict[str, RoleSpec] = {
         supervisor="orch",
         is_worker=True,
         writes_code=True,
-        perms=_worker_perms(["Bash(*deploy*)", "Bash(kubectl apply:*)"]),
+        perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
     ),
     "be": RoleSpec(
         title="BE — Senior Backend Engineer (+ data / ML)",
@@ -187,7 +194,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["edit src", "bypass its own gates"],
         supervisor="tl",
         is_worker=True,
-        perms=_worker_perms(["Edit(src/**)", "Write(src/**)", "Bash(*deploy*)"]),
+        perms=_worker_perms([]),  # implementer: edits tests/code; prod-protected by base
     ),
     "sec": RoleSpec(
         title="SEC — Security & Compliance",
@@ -202,6 +209,6 @@ ROLES: dict[str, RoleSpec] = {
         supervisor="tl",
         is_worker=True,
         writes_code=True,
-        perms=_worker_perms(["Bash(icacls:*)", "Bash(chmod:*)", "Bash(*deploy*)"]),
+        perms=_worker_perms(["Bash(icacls:*)", "Bash(chmod:*)"]),
     ),
 }
