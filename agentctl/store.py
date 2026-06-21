@@ -92,6 +92,21 @@ def inbox(path: Path, role: str, unread_only: bool = False) -> list[sqlite3.Row]
         con.close()
 
 
+def activity(path: Path, role: str, limit: int = 20) -> list[sqlite3.Row]:
+    """Recent envelopes where `role` is sender OR recipient, newest first.
+
+    The Librarian's view of a role's working set: inbox + outbox together, used to
+    build a compact carry-forward brief in place of the full session transcript."""
+    init(path)
+    con = _connect(path)
+    try:
+        return list(con.execute(
+            "SELECT * FROM envelopes WHERE from_role = ? OR to_role = ? "
+            "ORDER BY seq DESC LIMIT ?", (role, role, limit)))
+    finally:
+        con.close()
+
+
 def get(path: Path, env_id: str):
     """Point-lookup a single envelope by id (indexed). None if absent.
 

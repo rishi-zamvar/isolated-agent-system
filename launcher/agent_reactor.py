@@ -38,16 +38,36 @@ def pending_wakes(wake_dir, role: str, seen: set[str]) -> list[str]:
     return out
 
 
-def claude_cmd(role: str) -> list[str]:
-    """The headless, context-warm invocation that processes this role's inbox.
+def claude_cmd(role: str, brief_text: str | None = None) -> list[str]:
+    """The headless invocation that processes this role's inbox.
 
     Passes --model EXPLICITLY from the active preset — `claude -p` does NOT honor
     the per-profile settings.json model, so without this every agent silently runs
     the account-default (Opus) and the cost tiering never takes effect.
-    --output-format json so we can read back token usage + cost + tool activity."""
+    --output-format json so we can read back token usage + cost + tool activity.
+
+    Two context modes:
+    - normal: `--continue` keeps the session warm (cheap cold-start amortization).
+    - compaction: when the Librarian leaves a `brief_text`, we DROP `--continue` and
+      start a fresh, small session seeded with that curated carry-forward. This is
+      the token saver — the bloated transcript is abandoned; the next runs `--continue`
+      the new small session."""
     model = model_for(role, os.environ.get("FLEET_PRESET", "standard"))
-    return ["claude", "-p", "--continue", "--model", model, "--output-format", "json",
-            WAKE_PROMPT.format(role=role)]
+    base = ["claude", "-p"]
+    if brief_text is None:
+        base += ["--continue"]
+        prompt = WAKE_PROMPT.format(role=role)
+    else:
+        prompt = brief_text.rstrip() + "\n\n" + WAKE_PROMPT.format(role=role)
+    return base + ["--model", model, "--output-format", "json", prompt]
+
+
+def brief_for(briefs_dir, role: str) -> Path | None:
+    """The Librarian's pending carry-forward brief for `role`, if one is waiting."""
+    if not briefs_dir:
+        return None
+    p = Path(briefs_dir) / f"{role}.brief"
+    return p if p.exists() else None
 
 
 def make_runner(role: str, token_log: Path, status_dir: Path):
@@ -92,8 +112,23 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
     return run
 
 
-def drive_once(role: str, runner) -> None:
-    runner(claude_cmd(role))
+def drive_once(role: str, runner, briefs_dir=None) -> None:
+    """Drive one wake. If the Librarian left a carry-forward brief, run a fresh
+    session seeded with it and consume the brief afterward (the fresh, small session
+    is now the live one that subsequent `--continue` runs extend)."""
+    bp = brief_for(briefs_dir, role)
+    brief_text = None
+    if bp is not None:
+        try:
+            brief_text = bp.read_text(encoding="utf-8")
+        except OSError:
+            brief_text = None
+    runner(claude_cmd(role, brief_text=brief_text))
+    if bp is not None:
+        try:
+            bp.unlink()
+        except OSError:
+            pass
 
 
 def heartbeat_path(wake_dir, role: str) -> Path:
@@ -111,6 +146,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
     idle) so observers can distinguish 'reactor alive' from 'bus alive'."""
     status_dir = Path(wake_dir).parent / "heartbeats"
     token_log = Path(wake_dir).parent / "token_usage.jsonl"
+    briefs_dir = Path(wake_dir).parent / "briefs"  # Librarian drops carry-forwards here
     status_dir.mkdir(parents=True, exist_ok=True)
     if runner is None:
         runner = make_runner(role, token_log, status_dir)
@@ -125,7 +161,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            drive_once(role, runner)
+            drive_once(role, runner, briefs_dir=briefs_dir)
             drives += 1
         time.sleep(poll)
         i += 1
