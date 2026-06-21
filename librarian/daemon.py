@@ -24,7 +24,12 @@ from pathlib import Path
 from agentctl import store
 from librarian import cabinet, distill
 
-THRESHOLD_IN = 200_000  # input tokens that flag a bloated, compaction-worthy context
+# Input tokens (input + cache_read) that flag a bloated, compaction-worthy context.
+# Tuned from live data: a freshly-compacted but actively-working run lands ~200-250k
+# (within-run agentic cache reads), while a bloated --continue carryover runs 2-4M.
+# The threshold must sit well above the fresh-run band so compaction doesn't thrash
+# (re-firing every cycle on its own post-compaction run).
+THRESHOLD_IN = 1_000_000
 
 
 def _read_token_log(token_log) -> list[dict]:
