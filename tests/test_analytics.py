@@ -118,6 +118,30 @@ def test_zero_bloat_score_in_range():
     assert bloat.zero_bloat_score([]) == 0
 
 
+def _commit(files):
+    """Minimal commit list for inline zero_bloat_score tests."""
+    return [{"sha": "x", "ts": 0, "files": files}]
+
+
+def test_zero_bloat_dep_growth_penalises_score():
+    clean = _commit([{"path": "src/app.py", "add": 40, "del": 5}])
+    dep_heavy = _commit([{"path": "src/app.py", "add": 40, "del": 5},
+                         {"path": "requirements.txt", "add": 40, "del": 0}])
+    assert bloat.zero_bloat_score(dep_heavy) < bloat.zero_bloat_score(clean)
+
+
+def test_zero_bloat_balloon_diff_penalises_score():
+    compact = _commit([{"path": "src/a.py", "add": 5, "del": 0}])
+    balloon = _commit([{"path": "src/a.py", "add": 2000, "del": 0}])
+    assert bloat.zero_bloat_score(balloon) < bloat.zero_bloat_score(compact)
+
+
+def test_zero_bloat_very_large_diff_scores_below_medium():
+    mid = _commit([{"path": "src/a.py", "add": 100, "del": 0}])
+    huge = _commit([{"path": "src/a.py", "add": 3000, "del": 0}])
+    assert bloat.zero_bloat_score(huge) < bloat.zero_bloat_score(mid)
+
+
 # --------------------------------------------------------------------- ijw ----
 
 def test_one_shot_success_rate():
