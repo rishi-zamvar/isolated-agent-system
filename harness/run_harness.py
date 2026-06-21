@@ -38,21 +38,19 @@ def live_probe(n: int) -> bool:  # wired at bring-up (Phases 4/5)
     raise NotImplementedError(f"live probe for test {n} is wired during bring-up")
 
 
-def main(live: bool = False) -> int:
-    rows = []
-    for n in sorted(set(UNIT) | set(LIVE)):
-        if n in UNIT:
-            desc, node = UNIT[n]
-            rows.append((n, "unit", desc, "PASS" if run_unit(node) else "FAIL"))
-        else:
-            if not live:
-                rows.append((n, "live", LIVE[n], "SKIP (needs topology)"))
-            else:
-                try:
-                    rows.append((n, "live", LIVE[n], "PASS" if live_probe(n) else "FAIL"))
-                except NotImplementedError:
-                    rows.append((n, "live", LIVE[n], "PENDING (probe not wired)"))
+def _collect_row(n: int, live: bool) -> tuple:
+    if n in UNIT:
+        desc, node = UNIT[n]
+        return (n, "unit", desc, "PASS" if run_unit(node) else "FAIL")
+    if not live:
+        return (n, "live", LIVE[n], "SKIP (needs topology)")
+    try:
+        return (n, "live", LIVE[n], "PASS" if live_probe(n) else "FAIL")
+    except NotImplementedError:
+        return (n, "live", LIVE[n], "PENDING (probe not wired)")
 
+
+def _print_table(rows: list) -> list:
     print(f"{'#':>2}  {'kind':<5}  {'result':<22}  check")
     print("-" * 78)
     for n, kind, desc, res in rows:
@@ -62,6 +60,12 @@ def main(live: bool = False) -> int:
     print("-" * 78)
     print(f"{passed} PASS, {len(failed)} FAIL, "
           f"{sum(1 for r in rows if r[3].startswith(('SKIP', 'PENDING')))} pending")
+    return failed
+
+
+def main(live: bool = False) -> int:
+    rows = [_collect_row(n, live) for n in sorted(set(UNIT) | set(LIVE))]
+    failed = _print_table(rows)
     return 1 if failed else 0
 
 
