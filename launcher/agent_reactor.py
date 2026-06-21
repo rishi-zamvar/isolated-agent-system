@@ -177,6 +177,29 @@ def _actionable(unread) -> bool:
     return any((r["event"] or "").upper() not in _NOISE_EVENTS for r in unread)
 
 
+def _service_wake(role: str, runner, briefs_dir, status_dir, store_path) -> int:
+    """Handle one pending wake: drive a full run if there's actionable work, else
+    drain pure ack/status noise cheaply (no claude spawn). Returns runs spawned (0/1)."""
+    unread = _unread(role, store_path)
+    if _actionable(unread):
+        try:
+            drive_once(role, runner, briefs_dir=briefs_dir,
+                       session_dir=status_dir, store_path=store_path)
+        except Exception as e:  # one bad drive must not kill the reactor
+            print(f"[reactor:{role}] drive error: {e}", flush=True)
+        return 1
+    # drain the noise so queue-depth stays honest and it doesn't re-wake
+    for r in (unread or []):
+        try:
+            _store.mark_read(Path(store_path), r["id"])
+        except Exception:
+            pass
+    if unread:
+        print(f"[reactor:{role}] wake drained — {len(unread)} noise msg(s), "
+              f"no claude run", flush=True)
+    return 0
+
+
 def _log_usage(token_log: Path, role: str, d: dict, sid: str,
                edited: bool, compacted: bool) -> None:
     u = d.get("usage") or {}
@@ -307,25 +330,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            unread = _unread(role, store_path)
-            if _actionable(unread):
-                try:
-                    drive_once(role, runner, briefs_dir=briefs_dir,
-                               session_dir=status_dir, store_path=store_path)
-                except Exception as e:  # one bad drive must not kill the reactor
-                    print(f"[reactor:{role}] drive error: {e}", flush=True)
-                drives += 1
-            else:
-                # pure ack/status noise — skip the expensive spawn, but drain the
-                # inbox cheaply so queue-depth stays honest and it doesn't re-wake.
-                for r in (unread or []):
-                    try:
-                        _store.mark_read(Path(store_path), r["id"])
-                    except Exception:
-                        pass
-                if unread:
-                    print(f"[reactor:{role}] wake drained — {len(unread)} noise msg(s), "
-                          f"no claude run", flush=True)
+            drives += _service_wake(role, runner, briefs_dir, status_dir, store_path)
         time.sleep(poll)
         i += 1
     return drives
