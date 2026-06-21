@@ -118,15 +118,22 @@ def burn_rate(recs: list[dict]) -> dict:
             "span_hr": round(span_hr, 2)}
 
 
-def waste(recs: list[dict]) -> dict:
-    """Runs that produced no code edit — pure context re-reads (candidate waste).
+# Roles whose deliverable IS a code edit. Thinker roles (orch/pm/tl/qa/sec) produce
+# reasoning, review, routing and escalation — messages, not git edits — so a no-edit
+# run for them is their job, not waste. Counting them inflated waste to ~92%.
+_IMPLEMENTER_ROLES = frozenset({"be", "fe", "plat"})
 
-    Without the bus we can't see whether a message was sent, so this is an upper
-    bound; flow.idle_reads refines it by joining the bus."""
-    idle = [r for r in recs if not r.get("edited")]
+
+def waste(recs: list[dict]) -> dict:
+    """No-code-edit runs among IMPLEMENTER roles — runs that were meant to change code
+    and didn't (pure context re-reads). Scoped to be/fe/plat so the percentage answers
+    'of the runs that should have shipped code, how many produced nothing.'"""
+    impl = [r for r in recs if (r.get("role") or "") in _IMPLEMENTER_ROLES]
+    idle = [r for r in impl if not r.get("edited")]
     idle_cost = sum(r.get("cost") or 0 for r in idle)
     return {"no_edit_runs": len(idle), "no_edit_cost": round(idle_cost, 4),
-            "no_edit_pct": round(100 * len(idle) / len(recs), 1) if recs else 0}
+            "no_edit_pct": round(100 * len(idle) / len(impl), 1) if impl else 0,
+            "scope": "implementer_roles"}
 
 
 def cache_hit_series(recs: list[dict], buckets: int = 24) -> list[dict]:

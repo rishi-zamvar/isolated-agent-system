@@ -62,10 +62,14 @@ def handoff_latency(rows: list[dict]) -> dict:
                  for r in rows if r.get("read_at"))
     lat = [x for x in lat if x >= 0]
     if not lat:
-        return {"avg_s": 0.0, "p50_s": 0.0, "p90_s": 0.0, "n": 0}
-    return {"avg_s": round(sum(lat) / len(lat), 1),
-            "p50_s": round(lat[len(lat) // 2], 1),
-            "p90_s": round(lat[int(len(lat) * 0.9)], 1), "n": len(lat)}
+        return {"avg_s": 0.0, "p50_s": 0.0, "p90_s": 0.0,
+                "avg_ms": 0.0, "p50_ms": 0.0, "p90_ms": 0.0, "n": 0}
+    avg_s = sum(lat) / len(lat)
+    p50_s = lat[len(lat) // 2]
+    p90_s = lat[int(len(lat) * 0.9)]
+    return {"avg_s": round(avg_s, 1), "p50_s": round(p50_s, 1), "p90_s": round(p90_s, 1),
+            "avg_ms": round(avg_s * 1000), "p50_ms": round(p50_s * 1000),
+            "p90_ms": round(p90_s * 1000), "n": len(lat)}
 
 
 def cycle_time(rows: list[dict]) -> dict:
@@ -77,9 +81,13 @@ def cycle_time(rows: list[dict]) -> dict:
             groups.setdefault(cid, []).append(_epoch(r.get("created_at")))
     spans = [(max(ts) - min(ts)) / 60.0 for ts in groups.values() if len(ts) > 1]
     if not spans:
-        return {"tickets": len(groups), "avg_min": 0.0, "max_min": 0.0}
-    return {"tickets": len(groups), "avg_min": round(sum(spans) / len(spans), 1),
-            "max_min": round(max(spans), 1)}
+        return {"tickets": len(groups), "avg_min": 0.0, "max_min": 0.0,
+                "avg_ms": 0.0, "max_ms": 0.0}
+    avg_min = sum(spans) / len(spans)
+    max_min = max(spans)
+    return {"tickets": len(groups), "avg_min": round(avg_min, 1),
+            "max_min": round(max_min, 1), "avg_ms": round(avg_min * 60000),
+            "max_ms": round(max_min * 60000)}
 
 
 def rework(rows: list[dict]) -> dict:
@@ -87,8 +95,10 @@ def rework(rows: list[dict]) -> dict:
     def n(*keys):
         return sum(1 for r in rows
                    if any(k in (r.get("event") or "").upper() for k in keys))
-    return {"revised": n("REVISED"), "challenges": n("CHALLENGE"),
-            "rejects": n("REJECT"), "escalations": n("ESCALATE")}
+    counts = {"revised": n("REVISED"), "challenges": n("CHALLENGE"),
+              "rejects": n("REJECT"), "escalations": n("ESCALATE")}
+    counts["total"] = sum(counts.values())
+    return counts
 
 
 def bottleneck(rows: list[dict]) -> dict:

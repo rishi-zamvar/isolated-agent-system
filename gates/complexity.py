@@ -9,14 +9,24 @@ _BRANCH = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.ExceptHandler,
            ast.IfExp, ast.comprehension)
 
 
-def _score(node: ast.AST) -> int:
-    score = 1
-    for child in ast.walk(node):
+def _decision_points(node: ast.AST) -> int:
+    """Count decision points in `node`'s own body, NOT descending into nested
+    function/lambda bodies — those are scored as their own functions, so absorbing
+    their branches double-counts (a CC=1 wrapper around a CC=11 closure read as 11)."""
+    total = 0
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
         if isinstance(child, _BRANCH):
-            score += 1
+            total += 1
         elif isinstance(child, ast.BoolOp):
-            score += len(child.values) - 1
-    return score
+            total += len(child.values) - 1
+        total += _decision_points(child)
+    return total
+
+
+def _score(node: ast.AST) -> int:
+    return 1 + _decision_points(node)
 
 
 def score_functions(source: str) -> dict[str, int]:

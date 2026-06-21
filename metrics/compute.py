@@ -14,20 +14,39 @@ import json
 import sqlite3
 from pathlib import Path
 
-CHALLENGE = "CHALLENGE"
-REJECT = "REJECT"
 ACCEPT = "ACCEPT"
+# Review *decisions* (not thread chatter). Challenges on the live bus arrive as
+# ChallengeThread envelopes; accepts/challenges also ride ReviewVerdict. Count both,
+# and read the decision from payload first, else the envelope event.
+ACCEPT_KINDS = {"ACCEPT", "APPROVE"}
+CHALLENGE_KINDS = {"CHALLENGE", "REJECT", "CORRECTION", "CHANGES_REQUESTED",
+                   "REQUEST_CHANGES", "REVISED"}
+DECISION_KINDS = ACCEPT_KINDS | CHALLENGE_KINDS
+CHALLENGE = "CHALLENGE"  # back-compat
+REJECT = "REJECT"
+
+
+def _kind(r: dict) -> str:
+    """The review decision for a row — payload wins, else the envelope event."""
+    p = r.get("payload") or {}
+    return (p.get("kind") or p.get("verdict") or r.get("event") or "").upper()
 
 
 def verdicts_from_rows(rows: list[dict]) -> list[dict]:
-    """Extract verdict records from ReviewVerdict envelopes."""
+    """Extract review *decisions* from ReviewVerdict AND ChallengeThread envelopes.
+
+    Thread chatter (NOTE/RESOLVE/RESPOND/ACK) is not a decision and is skipped, so
+    challenge_rate measures reviewer pushback share, not raw message volume."""
     out = []
     for r in rows:
-        if r.get("type") != "ReviewVerdict":
+        if r.get("type") not in ("ReviewVerdict", "ChallengeThread"):
             continue
-        p = r.get("payload", {})
+        k = _kind(r)
+        if k not in DECISION_KINDS:
+            continue
+        p = r.get("payload") or {}
         out.append({"from_role": r["from_role"], "to_role": r["to_role"],
-                    "kind": p.get("kind"), "verified": p.get("verified", [])})
+                    "kind": k, "verified": p.get("verified", [])})
     return out
 
 
@@ -35,11 +54,11 @@ def challenge_rate(verdicts: list[dict], role: str) -> float:
     sent = [v for v in verdicts if v["from_role"] == role]
     if not sent:
         return 0.0
-    return sum(1 for v in sent if v["kind"] == CHALLENGE) / len(sent)
+    return sum(1 for v in sent if v["kind"] in CHALLENGE_KINDS) / len(sent)
 
 
 def accept_with_verification(verdicts: list[dict], role: str) -> float:
-    accepts = [v for v in verdicts if v["from_role"] == role and v["kind"] == ACCEPT]
+    accepts = [v for v in verdicts if v["from_role"] == role and v["kind"] in ACCEPT_KINDS]
     if not accepts:
         return 0.0
     return sum(1 for v in accepts if v["verified"]) / len(accepts)
@@ -47,7 +66,7 @@ def accept_with_verification(verdicts: list[dict], role: str) -> float:
 
 def rework_caused(verdicts: list[dict], role: str) -> int:
     return sum(1 for v in verdicts
-               if v["to_role"] == role and v["kind"] in (CHALLENGE, REJECT))
+               if v["to_role"] == role and v["kind"] in CHALLENGE_KINDS)
 
 
 def per_agent(verdicts: list[dict], roles) -> dict[str, dict]:
@@ -64,8 +83,8 @@ def per_agent(verdicts: list[dict], roles) -> dict[str, dict]:
 def fleet_metrics(verdicts: list[dict]) -> dict:
     """Fleet-wide challenge_rate and accept_with_verification across all roles."""
     total = len(verdicts)
-    chal = sum(1 for v in verdicts if v["kind"] == CHALLENGE) / total if total else 0.0
-    accepts = [v for v in verdicts if v["kind"] == ACCEPT]
+    chal = sum(1 for v in verdicts if v["kind"] in CHALLENGE_KINDS) / total if total else 0.0
+    accepts = [v for v in verdicts if v["kind"] in ACCEPT_KINDS]
     awv = sum(1 for v in accepts if v["verified"]) / len(accepts) if accepts else 0.0
     return {
         "challenge_rate": round(chal, 3),
@@ -78,8 +97,10 @@ def from_store(store_path, roles) -> dict[str, dict]:
     con.row_factory = sqlite3.Row
     try:
         rows = [{"type": r["type"], "from_role": r["from_role"],
-                 "to_role": r["to_role"], "payload": json.loads(r["payload"] or "{}")}
-                for r in con.execute("SELECT type, from_role, to_role, payload FROM envelopes")]
+                 "to_role": r["to_role"], "event": r["event"],
+                 "payload": json.loads(r["payload"] or "{}")}
+                for r in con.execute(
+                    "SELECT type, from_role, to_role, event, payload FROM envelopes")]
     finally:
         con.close()
     return per_agent(verdicts_from_rows(rows), roles)

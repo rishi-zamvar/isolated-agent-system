@@ -40,15 +40,24 @@ def test_ratio(commits: list[dict]) -> float:
     return round(test_add / code_add, 3) if code_add else 0.0
 
 
+_THRASH_MIN_CHURN = 10  # lines changed in a touch for it to count as a real rewrite
+
+
 def thrash(commits: list[dict]) -> dict:
-    """Files touched in more than one commit — rewrite/rework noise."""
-    seen: dict[str, int] = {}
+    """Files genuinely REWRITTEN across multiple commits — rework noise.
+
+    Size-weighted: a file is 'rewritten' only if it received >= 2 substantive touches
+    (each >= _THRASH_MIN_CHURN lines). A file nudged by many 1-line edits is not thrash;
+    counting it as such inflated the fraction toward 1.0 on busy worktrees."""
+    touches: dict[str, list[int]] = {}
     for c in commits:
         for f in c["files"]:
-            seen[f["path"]] = seen.get(f["path"], 0) + 1
-    multi = sum(1 for v in seen.values() if v > 1)
-    return {"files": len(seen), "rewritten": multi,
-            "frac": round(multi / len(seen), 3) if seen else 0.0}
+            churn = (f.get("add", 0) or 0) + (f.get("del", 0) or 0)
+            touches.setdefault(f["path"], []).append(churn)
+    multi = sum(1 for chs in touches.values()
+                if sum(1 for ch in chs if ch >= _THRASH_MIN_CHURN) >= 2)
+    return {"files": len(touches), "rewritten": multi,
+            "frac": round(multi / len(touches), 3) if touches else 0.0}
 
 
 def dep_growth(commits: list[dict]) -> int:

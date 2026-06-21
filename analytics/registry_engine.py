@@ -137,14 +137,16 @@ def _load_bus_rows(store_path) -> list[dict]:
     try:
         rows = []
         for r in con.execute(
-                "SELECT type, from_role, to_role, payload, created_at FROM envelopes"):
+                "SELECT type, from_role, to_role, event, payload, "
+                "correlation_id, created_at, read_at FROM envelopes"):
             try:
                 payload = json.loads(r["payload"] or "{}")
             except json.JSONDecodeError:
                 payload = {}
             rows.append({"type": r["type"], "from_role": r["from_role"],
-                         "to_role": r["to_role"], "payload": payload,
-                         "created_at": r["created_at"]})
+                         "to_role": r["to_role"], "event": r["event"],
+                         "payload": payload, "correlation_id": r["correlation_id"],
+                         "created_at": r["created_at"], "read_at": r["read_at"]})
         return rows
     finally:
         con.close()
@@ -158,7 +160,9 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
     """
     recs = _load_token_recs(token_log_path)
     rows = _load_bus_rows(store_path)
-    commits = bloat.from_repo(repo_path) if repo_path else []
+    # "recent" window — the diff_churn / thrash metrics are defined over recent
+    # history, not the full repo life (full life dilutes or inflates depending on age).
+    commits = bloat.from_repo(repo_path, limit=60) if repo_path else []
 
     econ = economy.economy(recs)
     econ["cache_hit_series"] = economy.cache_hit_series(recs)

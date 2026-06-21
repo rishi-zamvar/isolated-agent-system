@@ -151,6 +151,32 @@ def _pick_model(role: str, store_path) -> str | None:
     return model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
 
 
+# Events that carry no work — pure acknowledgement/status. A wake whose entire
+# unread inbox is these should NOT spend a full `claude -p` run; the messages stay
+# unread and are read on the next substantive wake (warm session reads the whole inbox).
+_NOISE_EVENTS = frozenset({"ACK", "STATUS_ACK", "NOTE", "RESOLVE", "STATUS", "NUDGE", "PING"})
+
+
+def _unread(role: str, store_path):
+    """Unread inbox rows, or None when the store is absent (legacy: always drive)."""
+    if store_path is None or not Path(store_path).exists():
+        return None
+    try:
+        return _store.inbox(Path(store_path), role, unread_only=True)
+    except Exception:
+        return None  # never let a peek failure starve the agent
+
+
+def _actionable(unread) -> bool:
+    """True if any unread message is substantive (not pure ack/status noise).
+    None (no store) → True (legacy always-drive). Empty list → False."""
+    if unread is None:
+        return True
+    if not unread:
+        return False
+    return any((r["event"] or "").upper() not in _NOISE_EVENTS for r in unread)
+
+
 def _log_usage(token_log: Path, role: str, d: dict, sid: str,
                edited: bool, compacted: bool) -> None:
     u = d.get("usage") or {}
@@ -281,12 +307,25 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            try:
-                drive_once(role, runner, briefs_dir=briefs_dir,
-                           session_dir=status_dir, store_path=store_path)
-            except Exception as e:  # one bad drive must not kill the reactor
-                print(f"[reactor:{role}] drive error: {e}", flush=True)
-            drives += 1
+            unread = _unread(role, store_path)
+            if _actionable(unread):
+                try:
+                    drive_once(role, runner, briefs_dir=briefs_dir,
+                               session_dir=status_dir, store_path=store_path)
+                except Exception as e:  # one bad drive must not kill the reactor
+                    print(f"[reactor:{role}] drive error: {e}", flush=True)
+                drives += 1
+            else:
+                # pure ack/status noise — skip the expensive spawn, but drain the
+                # inbox cheaply so queue-depth stays honest and it doesn't re-wake.
+                for r in (unread or []):
+                    try:
+                        _store.mark_read(Path(store_path), r["id"])
+                    except Exception:
+                        pass
+                if unread:
+                    print(f"[reactor:{role}] wake drained — {len(unread)} noise msg(s), "
+                          f"no claude run", flush=True)
         time.sleep(poll)
         i += 1
     return drives

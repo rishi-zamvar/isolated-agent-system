@@ -321,14 +321,14 @@
   {
     "key": "accept_verified_pct",
     "category": "Quality",
-    "label": "cited accepts %",
-    "unit": "percent",
+    "label": "cited accepts",
+    "unit": "ratio",
     "definition": "Share of ACCEPT verdicts that recorded a non-empty verified[] list \u2014 proof that the reviewer reproduced the claim.",
     "so_what": "Unverified accepts (empty verified[]) are bare approvals, which PM discipline forbids. Low % means reviews are cursory, not reproductive.",
     "display": "kpi",
     "insight": {
-      "warn_if": "< 80",
-      "good_if": "> 95",
+      "warn_if": "< 0.8",
+      "good_if": "> 0.95",
       "warn_msg": "Many accepts lack evidence. Per norms: no bare approvals \u2014 empty verified[] is a defect."
     },
     "source": "quality.accept_with_verification"

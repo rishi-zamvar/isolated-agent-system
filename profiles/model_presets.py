@@ -53,11 +53,22 @@ _OPUS_TYPES = frozenset({"ChallengeThread", "VulnFinding", "ThreatModel", "Revie
 # Events that are bare acknowledgements — never trigger Opus regardless of type.
 _BARE_ACK_EVENTS = frozenset({"ACK", "STATUS_ACK", "NOTE", "RESOLVE"})
 
-# (type, event) pairs cheap enough for Haiku — pure routing, no analysis.
+# (type, event) pairs cheap enough for Haiku — pure routing/notification, no analysis.
+# (Pure ack/status NOISE no longer even spawns a run — the reactor drains it; these are
+#  the actionable-but-mechanical wakes that still run, routed to the cheapest tier.)
 _CHEAP = frozenset({
     ("Ticket", "STATUS_ACK"),
     ("Ticket", "ACK"),
     ("Ticket", "NOTE"),
+    ("Ticket", "STATUS"),
+    ("Ticket", "PING"),
+    ("Ticket", "RESOLVE"),
+    ("DeployRecord", "ACK"),
+    ("DeployRecord", "DEPLOYED"),
+    ("Telemetry", "REPORT"),
+    ("Telemetry", "EMIT"),
+    ("FreeText", "STATUS"),
+    ("FreeText", "NUDGE"),
 })
 
 
