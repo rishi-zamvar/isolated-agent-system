@@ -41,10 +41,39 @@ def test_opus_for_reviewverdict():
     assert model_for_wake([("ReviewVerdict", "APPROVE")], "be") == OPUS
 
 
-def test_opus_wins_when_mixed_with_cheap():
-    # high-stakes type always escalates, even alongside ACKs
-    te = [("ChallengeThread", "RESOLVE"), ("Ticket", "STATUS_ACK")]
+def test_high_stakes_non_ack_event_escalates_alongside_cheap():
+    # ChallengeThread/CHALLENGE (non-ack event) + cheap routing → still Opus
+    te = [("ChallengeThread", "CHALLENGE"), ("Ticket", "STATUS_ACK")]
     assert model_for_wake(te, "be") == OPUS
+
+
+# ---------------------------------------------------------------------------
+# f1 — bare ack events must never trigger Opus regardless of type
+# (AC: ACK/STATUS_ACK/NOTE/RESOLVE never escalate)
+# ---------------------------------------------------------------------------
+
+def test_reviewverdict_ack_does_not_escalate_to_opus():
+    assert model_for_wake([("ReviewVerdict", "ACK")], "be") != OPUS
+
+
+def test_challengethread_resolve_does_not_escalate_to_opus():
+    assert model_for_wake([("ChallengeThread", "RESOLVE")], "be") != OPUS
+
+
+def test_challengethread_ack_does_not_escalate_to_opus():
+    assert model_for_wake([("ChallengeThread", "ACK")], "be") != OPUS
+
+
+def test_reviewverdict_request_changes_still_escalates():
+    # REQUEST_CHANGES is not a bare ack — Opus escalation applies
+    assert model_for_wake([("ReviewVerdict", "REQUEST_CHANGES")], "be") == OPUS
+
+
+def test_bare_ack_mixed_with_cheap_uses_preset_default():
+    # ChallengeThread/RESOLVE is bare ack, Ticket/STATUS_ACK is cheap →
+    # no Opus, not all-cheap either → preset default
+    te = [("ChallengeThread", "RESOLVE"), ("Ticket", "STATUS_ACK")]
+    assert model_for_wake(te, "be") == model_for("be")
 
 
 def test_haiku_for_single_status_ack():
@@ -159,3 +188,66 @@ def test_drive_once_uses_preset_default_when_store_absent(tmp_path):
         store_path=absent,
     )
     assert seen and model_for("be") in seen[0]
+
+
+# ---------------------------------------------------------------------------
+# f1 integration — drive_once must not use Opus for bare ack events
+# ---------------------------------------------------------------------------
+
+def test_drive_once_reviewverdict_ack_does_not_use_opus(tmp_path):
+    db = tmp_path / "agentctl.db"
+    _store.init(db)
+    _store.insert(db, _envelope("be", "ReviewVerdict", "ACK"))
+
+    seen = []
+    agent_reactor.drive_once(
+        "be",
+        runner=lambda cmd, compacted=False: seen.append(cmd),
+        store_path=db,
+    )
+    assert seen and OPUS not in seen[0]
+
+
+def test_drive_once_challengethread_resolve_does_not_use_opus(tmp_path):
+    db = tmp_path / "agentctl.db"
+    _store.init(db)
+    _store.insert(db, _envelope("be", "ChallengeThread", "RESOLVE"))
+
+    seen = []
+    agent_reactor.drive_once(
+        "be",
+        runner=lambda cmd, compacted=False: seen.append(cmd),
+        store_path=db,
+    )
+    assert seen and OPUS not in seen[0]
+
+
+# ---------------------------------------------------------------------------
+# f2 — escalation-peek extracted into _pick_model helper
+# ---------------------------------------------------------------------------
+
+def test_pick_model_helper_returns_opus_for_challengethread(tmp_path):
+    db = tmp_path / "agentctl.db"
+    _store.init(db)
+    _store.insert(db, _envelope("be", "ChallengeThread", "CHALLENGE"))
+    assert agent_reactor._pick_model("be", db) == OPUS
+
+
+def test_pick_model_helper_returns_none_when_store_absent(tmp_path):
+    assert agent_reactor._pick_model("be", tmp_path / "no.db") is None
+
+
+def test_pick_model_helper_returns_none_when_store_path_none():
+    assert agent_reactor._pick_model("be", None) is None
+
+
+def test_detect_edited_returns_true_on_git_change():
+    assert agent_reactor._detect_edited("old", "new", "")
+
+
+def test_detect_edited_returns_false_when_sig_unchanged():
+    assert not agent_reactor._detect_edited("same", "same", "no-edits")
+
+
+def test_detect_edited_returns_true_on_json_heuristic():
+    assert agent_reactor._detect_edited("same", "same", '"Edit" something')

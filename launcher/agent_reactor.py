@@ -116,6 +116,63 @@ def brief_for(briefs_dir, role: str) -> Path | None:
     return p if p.exists() else None
 
 
+def _start_keepalive(busy: Path, hb: Path) -> threading.Event:
+    """Start a background thread that refreshes the status + heartbeat beacons every 6 s.
+    Returns the stop Event; caller sets it when the subprocess returns."""
+    stop = threading.Event()
+
+    def _loop():
+        while not stop.wait(6):
+            try:
+                busy.write_text("processing")
+                hb.write_text(str(time.time()))
+            except OSError:
+                pass
+
+    threading.Thread(target=_loop, daemon=True).start()
+    return stop
+
+
+def _detect_edited(sig0, sig1, text: str = "") -> bool:
+    """True if the workspace changed (sig0 != sig1) or the JSON output references
+    a file-mutation tool — git signal is authoritative, JSON heuristic is fallback."""
+    git_edited = sig0 is not None and sig1 is not None and sig0 != sig1
+    return git_edited or ('"Edit"' in text or '"Write"' in text
+                          or '"NotebookEdit"' in text or '"MultiEdit"' in text)
+
+
+def _pick_model(role: str, store_path) -> str | None:
+    """Peek unread envelope types and return the escalated/downgraded model, or None
+    when the store is absent (preserves legacy behaviour — caller uses preset default)."""
+    if store_path is None or not Path(store_path).exists():
+        return None
+    te = [(r["type"], r["event"])
+          for r in _store.inbox(Path(store_path), role, unread_only=True)]
+    return model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
+
+
+def _log_usage(token_log: Path, role: str, d: dict, sid: str,
+               edited: bool, compacted: bool) -> None:
+    u = d.get("usage") or {}
+    in_fresh = u.get("input_tokens") or 0
+    in_cache = u.get("cache_read_input_tokens") or 0
+    rec = {"role": role,
+           "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
+           "in": in_fresh + in_cache,
+           "in_fresh": in_fresh,
+           "in_cache": in_cache,
+           "in_cache_create": u.get("cache_creation_input_tokens") or 0,
+           "out": u.get("output_tokens") or 0,
+           "cost": d.get("total_cost_usd"), "edited": edited,
+           "dur_ms": d.get("duration_ms"), "turns": d.get("num_turns"),
+           "compacted": compacted, "session_id": sid, "ts": time.time()}
+    try:
+        with open(token_log, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except OSError:
+        pass
+
+
 def make_runner(role: str, token_log: Path, status_dir: Path):
     """Default runner: run claude (capturing JSON), record per-run token usage +
     cost + whether it changed code, capture the session id (for deterministic
@@ -128,63 +185,28 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
 
     def run(cmd, compacted: bool = False):
         try:
-            busy.write_text("processing")           # live beacon: claude running
+            busy.write_text("processing")
         except OSError:
             pass
-        # keepalive: a claude run blocks the react loop, so without this the heartbeat
-        # + 'processing' beacon go stale and the monitor wrongly shows the agent offline
-        # on any run longer than ~3min. Refresh both every few seconds until it returns.
-        stop = threading.Event()
-
-        def keepalive():
-            while not stop.wait(6):
-                try:
-                    busy.write_text("processing")
-                    hb.write_text(str(time.time()))
-                except OSError:
-                    pass
-        sig0 = _ws_sig(_WORKREPO)                     # workspace state before the run
-        ka = threading.Thread(target=keepalive, daemon=True)
-        ka.start()
+        sig0 = _ws_sig(_WORKREPO)
+        stop = _start_keepalive(busy, hb)
         try:
             r = subprocess.run(cmd, capture_output=True, text=True)
         finally:
             stop.set()
-        # "made edits" = the agent changed the workspace git tree during the run.
-        # This is the reliable signal; the JSON-string check is a weak fallback.
         sig1 = _ws_sig(_WORKREPO)
-        git_edited = sig0 is not None and sig1 is not None and sig0 != sig1
-        edited = git_edited                          # default; JSON heuristic may also set it
+        edited = _detect_edited(sig0, sig1)          # git-only fallback before JSON parse
         try:
             d = json.loads(r.stdout or "{}")
-            u = d.get("usage") or {}
             sid = d.get("session_id") or ""
-            if sid:                                  # remember it for --resume
+            if sid:
                 try:
                     session_path(status_dir, role).write_text(sid, encoding="utf-8")
                 except OSError:
                     pass
-            text = json.dumps(d)
-            edited = git_edited or ('"Edit"' in text or '"Write"' in text
-                                    or '"NotebookEdit"' in text or '"MultiEdit"' in text)
-            in_fresh = u.get("input_tokens") or 0
-            in_cache = u.get("cache_read_input_tokens") or 0
-            rec = {"role": role,
-                   "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
-                   "in": in_fresh + in_cache,            # carried context (back-compat)
-                   "in_fresh": in_fresh,                  # uncached input — the expensive tokens
-                   "in_cache": in_cache,                  # cache reads — cheap (~0.1x)
-                   "in_cache_create": u.get("cache_creation_input_tokens") or 0,
-                   "out": u.get("output_tokens") or 0,
-                   "cost": d.get("total_cost_usd"), "edited": edited,
-                   "dur_ms": d.get("duration_ms"), "turns": d.get("num_turns"),
-                   "compacted": compacted, "session_id": sid, "ts": time.time()}
-            try:
-                with open(token_log, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(rec) + "\n")
-            except OSError:
-                pass
-            print(d.get("result", ""), flush=True)   # keep logs human-readable
+            edited = _detect_edited(sig0, sig1, json.dumps(d))
+            _log_usage(token_log, role, d, sid, edited, compacted)
+            print(d.get("result", ""), flush=True)
         except Exception:
             print(r.stdout or "", flush=True)
             if r.stderr:
@@ -216,11 +238,7 @@ def drive_once(role: str, runner, briefs_dir=None, session_dir=None,
         except OSError:
             brief_text = None
     session_id = None if bp is not None else read_session(session_dir, role)
-    model = None
-    if store_path is not None and Path(store_path).exists():
-        te = [(r["type"], r["event"])
-              for r in _store.inbox(Path(store_path), role, unread_only=True)]
-        model = model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
+    model = _pick_model(role, store_path)
     ret = runner(claude_cmd(role, brief_text=brief_text, session_id=session_id,
                             model=model),
                  compacted=bp is not None)
