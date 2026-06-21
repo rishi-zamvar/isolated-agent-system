@@ -161,10 +161,19 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
         comp = _cabinet.stats(cab)
         sel = _cabinet.selection_stats(cab)
         rec = _cabinet.recall_stats(cab)
+        eff = _cabinet.relevance_efficiency(cab)
         snap["librarian"] = {
             "compaction": {"tokens_saved": comp["saved"]},
             "selections": {"snipped_pct": sel["snip_pct"]},
             "recall": {"count": rec["recalls"]},
+            "relevance_efficiency": {
+                "removed_tokens": eff["removed_tokens"],
+                "recalls": eff["recalls"],
+                "recalls_per_compaction": eff["recalls_per_compaction"],
+                "precision": eff["precision"],
+                "ideal": eff["ideal"],
+            },
+            "recall_stats": {"by_role": rec["by_role"]},
         }
 
     return snap
