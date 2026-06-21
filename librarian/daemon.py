@@ -106,8 +106,9 @@ def _semantic_brief(role, store_path, cabinet_path, embedder, context_ref,
     relevant = [s for s in kept if s.get("keep") == "relevant"]
     # archive the snipped spans WITH embeddings so they're recallable later
     for s in snipped:
+        dur = "structural" if relevance.is_structural(s.get("type")) else "episodic"
         cabinet.file_fact(cabinet_path, role, s["text"], topic="compaction",
-                          kind="snip", durability="episodic", embedding=s["vec"])
+                          kind="snip", durability=dur, embedding=s["vec"])
     cabinet.record_selection(cabinet_path, role, len(structural), len(relevant),
                              len(snipped), backend=embedder.backend)
     brief = distill.semantic_brief(role, structural, relevant, context_ref)

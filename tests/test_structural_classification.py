@@ -1,0 +1,114 @@
+"""tkt-library-rag: TDD tests — failing first.
+
+Covers:
+  - daemon._semantic_brief files structural-type spans with durability=structural
+  - cabinet.backfill_structural_durability updates existing episodic rows
+  - librarian.cli._default_cabinet is cwd-independent (LIBRARIAN_CABINET env)
+"""
+import os
+
+import pytest
+
+from librarian import cabinet, relevance
+
+
+# ================================================== structural classification ===
+
+
+def _file_span(cab, body, span_type, durability="episodic"):
+    # Simulate what the daemon would do with the classification fix applied
+    dur = "structural" if relevance.is_structural(span_type) else "episodic"
+    cabinet.file_fact(cab, "be", body=body, kind="snip", durability=dur)
+    return dur
+
+
+def test_structural_span_type_gets_structural_durability(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    for t in relevance.STRUCTURAL_TYPES:
+        dur = _file_span(cab, f"tl→be  {t}/WORKSTREAM_BRIEF", t)
+        assert dur == "structural", f"type {t} should yield structural"
+
+
+def test_episodic_span_type_gets_episodic_durability(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    dur = _file_span(cab, "be→tl  PR/PR_SUBMIT", "PR")
+    assert dur == "episodic"
+
+
+def test_challenge_thread_is_episodic(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    dur = _file_span(cab, "tl→be  ChallengeThread/CHALLENGE", "ChallengeThread")
+    assert dur == "episodic"
+
+
+# ================================================== backfill_structural_durability ===
+
+
+def test_backfill_updates_structural_body_rows(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    # file a ContextDoc span with wrong (episodic) durability
+    cabinet.file_fact(cab, "be", body="tl→be  ContextDoc/WORKSTREAM_BRIEF  (abc)",
+                      kind="snip", durability="episodic")
+    cabinet.file_fact(cab, "be", body="be→tl  PR/PR_SUBMIT", kind="snip", durability="episodic")
+    updated = cabinet.backfill_structural_durability(cab)
+    assert updated >= 1
+    rows = {r["body"]: r for r in cabinet.recent_facts(cab)}
+    assert rows["tl→be  ContextDoc/WORKSTREAM_BRIEF  (abc)"]["durability"] == "structural"
+    assert rows["be→tl  PR/PR_SUBMIT"]["durability"] == "episodic"
+
+
+def test_backfill_covers_all_structural_types(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    for t in relevance.STRUCTURAL_TYPES:
+        cabinet.file_fact(cab, "be", body=f"tl→be  {t}/EVENT  (ref)",
+                          kind="snip", durability="episodic")
+    cabinet.backfill_structural_durability(cab)
+    rows = cabinet.recent_facts(cab)
+    assert all(r["durability"] == "structural" for r in rows)
+
+
+def test_backfill_leaves_truly_episodic_rows(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    cabinet.file_fact(cab, "be", body="some unrelated episodic note",
+                      kind="note", durability="episodic")
+    cabinet.backfill_structural_durability(cab)
+    rows = cabinet.recent_facts(cab)
+    assert rows[0]["durability"] == "episodic"
+
+
+def test_backfill_idempotent(tmp_path):
+    cab = tmp_path / "cab.db"
+    cabinet.init(cab)
+    cabinet.file_fact(cab, "be", body="tl→be  ADR/LOCK  (sha)",
+                      kind="snip", durability="episodic")
+    cabinet.backfill_structural_durability(cab)
+    cabinet.backfill_structural_durability(cab)  # second call must not error
+    rows = cabinet.recent_facts(cab)
+    assert rows[0]["durability"] == "structural"
+
+
+# ============================================== CLI cwd-independence ===
+
+
+def test_cli_default_cabinet_uses_librarian_cabinet_env(tmp_path, monkeypatch):
+    """_default_cabinet reads LIBRARIAN_CABINET env — cwd-independent."""
+    cab = tmp_path / "test_cabinet.db"
+    monkeypatch.setenv("LIBRARIAN_CABINET", str(cab))
+    from librarian.cli import _default_cabinet
+    assert _default_cabinet() == cab
+
+
+def test_cli_default_cabinet_falls_back_to_wake_dir(tmp_path, monkeypatch):
+    """Without LIBRARIAN_CABINET, falls back to AGENTCTL_WAKE/../cabinet.db."""
+    wake = tmp_path / "wake"
+    wake.mkdir()
+    monkeypatch.delenv("LIBRARIAN_CABINET", raising=False)
+    monkeypatch.setenv("AGENTCTL_WAKE", str(wake))
+    from librarian.cli import _default_cabinet
+    assert _default_cabinet() == tmp_path / "cabinet.db"

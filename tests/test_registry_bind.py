@@ -111,6 +111,21 @@ def test_fleet_metrics_no_accepts():
 # ============================================================ build_snapshot ==
 
 from analytics.registry_engine import build_snapshot
+from analytics.registry_engine import resolve_status
+
+
+def test_resolve_status_non_scalar_value_is_neutral_not_crash():
+    """A per-role map / series array must not be compared to a scalar threshold.
+
+    Regression: librarian_recalls_by_role resolves to a dict and (per AC4 lock
+    852916c2) keeps a presence-only warn_if; op(dict, thresh) raised TypeError and
+    500'd /api/registry. Non-scalar values resolve to 'neutral' instead.
+    """
+    assert resolve_status({"be": 1, "qa": 0}, {"warn_if": "> 0", "good_if": "== 0"}) == "neutral"
+    assert resolve_status([{"t": "x", "value": 0.3}], {"warn_if": "< 0.25"}) == "neutral"
+    # scalars (incl. bool 0/1 for librarian_ideal) still evaluate
+    assert resolve_status(0, {"warn_if": "== 0"}) == "warn"
+    assert resolve_status(True, {"warn_if": "== 0", "good_if": "== 1"}) == "good"
 
 
 def test_build_snapshot_optimizer_key_present(tmp_path):
@@ -202,19 +217,30 @@ def test_serve_registry_all_26_sources_resolve(tmp_path):
 
     assert "generated_at" in resp
     metrics = resp["metrics"]
-    assert len(metrics) == 26
+    # PM added 6 librarian.relevance_efficiency.* + librarian.recall_stats.by_role entries
+    assert len(metrics) == 32
 
     by_source = {m["source"]: m for m in metrics}
 
-    # The 6 new sources must resolve to non-null values
-    assert by_source["optimizer.open_count"]["value"] is not None
-    assert by_source["quality.challenge_rate"]["value"] is not None
-    assert by_source["quality.accept_with_verification"]["value"] is not None
-    assert by_source["librarian.compaction.tokens_saved"]["value"] is not None
-    assert by_source["librarian.selections.snipped_pct"]["value"] is not None
-    assert by_source["librarian.recall.count"]["value"] is not None
+    # Original 6 + new 6 sources must all resolve to non-null values
+    non_null_sources = (
+        "optimizer.open_count",
+        "quality.challenge_rate",
+        "quality.accept_with_verification",
+        "librarian.compaction.tokens_saved",
+        "librarian.selections.snipped_pct",
+        "librarian.recall.count",
+        "librarian.relevance_efficiency.removed_tokens",
+        "librarian.relevance_efficiency.recalls",
+        "librarian.relevance_efficiency.recalls_per_compaction",
+        "librarian.relevance_efficiency.precision",
+        "librarian.relevance_efficiency.ideal",
+        "librarian.recall_stats.by_role",
+    )
+    for src in non_null_sources:
+        assert by_source[src]["value"] is not None, f"{src} resolved to None"
 
-    # Spot-check: status is never "unknown" for the 6 new sources
+    # Spot-check: scalar sources (excluding by_role dict) must not be "unknown"
     for src in (
         "optimizer.open_count",
         "quality.challenge_rate",
@@ -222,5 +248,9 @@ def test_serve_registry_all_26_sources_resolve(tmp_path):
         "librarian.compaction.tokens_saved",
         "librarian.selections.snipped_pct",
         "librarian.recall.count",
+        "librarian.relevance_efficiency.removed_tokens",
+        "librarian.relevance_efficiency.recalls",
+        "librarian.relevance_efficiency.precision",
+        "librarian.relevance_efficiency.ideal",
     ):
         assert by_source[src]["status"] != "unknown", f"{src} resolved to unknown"

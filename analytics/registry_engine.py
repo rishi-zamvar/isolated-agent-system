@@ -52,6 +52,11 @@ def resolve_status(value: Any, insight: dict | None) -> str:
         return "unknown"
     if not insight:
         return "neutral"
+    # Non-scalar values (per-role maps, timeseries arrays) carry presence-only
+    # thresholds that the FE evaluates per element — a tile-level comparison is
+    # undefined here. Guard so op(value, thresh) cannot raise on a dict/list/str.
+    if not isinstance(value, (int, float)):
+        return "neutral"
     op, thresh = _parse_expr(insight.get("warn_if", ""))
     if op is not None and op(value, thresh):
         return "warn"
@@ -75,10 +80,24 @@ def _get_nested(snapshot: dict, path: str) -> Any:
     return obj
 
 
+def _is_timeseries(value: Any) -> bool:
+    return (isinstance(value, list) and bool(value)
+            and isinstance(value[-1], dict) and "value" in value[-1])
+
+
 def resolve_entry(entry: dict, snapshot: dict) -> dict:
-    """Return entry + {value, status} without mutating entry."""
-    value = _get_nested(snapshot, entry["source"])
-    return {**entry, "value": value, "status": resolve_status(value, entry.get("insight"))}
+    """Return entry + {value, status} without mutating entry.
+
+    Timeseries values (list of {t, value} dicts): headline = last bucket value;
+    status derived from the headline so insight thresholds apply meaningfully.
+    Non-timeseries collections fall through to resolve_status which returns neutral.
+    """
+    raw = _get_nested(snapshot, entry["source"])
+    if _is_timeseries(raw):
+        headline = raw[-1]["value"]
+        return {**entry, "value": raw,
+                "status": resolve_status(headline, entry.get("insight"))}
+    return {**entry, "value": raw, "status": resolve_status(raw, entry.get("insight"))}
 
 
 def build_response(catalog: list[dict], snapshot: dict, generated_at: str) -> dict:
@@ -142,6 +161,7 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
     commits = bloat.from_repo(repo_path) if repo_path else []
 
     econ = economy.economy(recs)
+    econ["cache_hit_series"] = economy.cache_hit_series(recs)
     flw = flow.flow(rows)
     blt = bloat.bloat(commits)
     verdicts = _compute.verdicts_from_rows(rows)
@@ -161,10 +181,19 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
         comp = _cabinet.stats(cab)
         sel = _cabinet.selection_stats(cab)
         rec = _cabinet.recall_stats(cab)
+        eff = _cabinet.relevance_efficiency(cab)
         snap["librarian"] = {
             "compaction": {"tokens_saved": comp["saved"]},
             "selections": {"snipped_pct": sel["snip_pct"]},
             "recall": {"count": rec["recalls"]},
+            "relevance_efficiency": {
+                "removed_tokens": eff["removed_tokens"],
+                "recalls": eff["recalls"],
+                "recalls_per_compaction": eff["recalls_per_compaction"],
+                "precision": eff["precision"],
+                "ideal": eff["ideal"],
+            },
+            "recall_stats": {"by_role": rec["by_role"]},
         }
 
     return snap

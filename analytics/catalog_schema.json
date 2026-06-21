@@ -13,7 +13,7 @@
     "unit":       { "enum": ["percent", "usd", "tokens", "count", "ratio", "ms"] },
     "definition": { "type": "string", "minLength": 1, "description": "Plain-language: what this number is." },
     "so_what":    { "type": "string", "minLength": 1, "description": "Why a human should care — the consequence." },
-    "display":    { "enum": ["kpi", "bar", "donut", "gauge", "list"] },
+    "display":    { "enum": ["kpi", "bar", "donut", "gauge", "list", "timeseries"] },
     "insight": {
       "type": "object",
       "additionalProperties": false,

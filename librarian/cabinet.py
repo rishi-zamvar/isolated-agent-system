@@ -375,6 +375,32 @@ def selection_stats(path: Path) -> dict:
     return s
 
 
+def backfill_structural_durability(path: Path) -> int:
+    """One-time migration: update facts whose body text contains a structural type
+    name (ContextDoc, ADR, DesignDoc, ApiContract, ThreatModel) to durability=structural.
+
+    Idempotent — already-structural rows are skipped. Returns count of updated rows.
+    The body format from _span_text is 'from→to  TYPE/event  (ref) ...', so structural
+    type names appear literally in the body of their own spans.
+    """
+    from librarian.relevance import STRUCTURAL_TYPES
+    init(path)
+    con = _connect(path)
+    try:
+        updated = 0
+        for type_name in STRUCTURAL_TYPES:
+            cur = con.execute(
+                "UPDATE facts SET durability='structural' "
+                "WHERE (durability IS NULL OR durability != 'structural') "
+                "AND body LIKE ?",
+                (f"%{type_name}%",))
+            updated += cur.rowcount
+        con.commit()
+        return updated
+    finally:
+        con.close()
+
+
 def stats(path: Path) -> dict:
     """Efficiency rollup for the monitor: how much the Librarian saved.
 
