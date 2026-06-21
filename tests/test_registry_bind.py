@@ -66,6 +66,22 @@ def test_open_count_nonexistent_repo():
     assert opt.open_count("/does/not/exist") == 0
 
 
+def test_open_count_skips_vcs_cache_and_temp_dirs(tmp_path):
+    """rglob must not count violations inside .git/.pytest_tmp/.pt/__pycache__/
+    node_modules/ — those are test fixtures, vendored, or build artifacts, not the
+    repo's own source. Pollution there falsely inflates the dashboard CC metric."""
+    (tmp_path / "real.py").write_text(_high_cc_source())  # 1 real violation
+    for d in (".git", ".pytest_tmp", ".pt", "__pycache__", "node_modules"):
+        sub = tmp_path / d
+        sub.mkdir()
+        (sub / "junk.py").write_text(_high_cc_source())   # must be ignored
+    # nested temp dir too
+    nested = tmp_path / "pkg" / ".pytest_tmp"
+    nested.mkdir(parents=True)
+    (nested / "junk.py").write_text(_high_cc_source())
+    assert opt.open_count(str(tmp_path)) == 1
+
+
 # ============================================================ fleet_metrics ==
 
 from metrics import compute

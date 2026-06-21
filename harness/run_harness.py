@@ -38,20 +38,23 @@ def live_probe(n: int) -> bool:  # wired at bring-up (Phases 4/5)
     raise NotImplementedError(f"live probe for test {n} is wired during bring-up")
 
 
+def _row_for(n: int, live: bool) -> tuple:
+    """Classify one harness check into (n, kind, desc, result). Unit checks run the
+    pytest node; live checks SKIP without --live, else run the probe (PENDING when the
+    probe is not yet wired)."""
+    if n in UNIT:
+        desc, node = UNIT[n]
+        return (n, "unit", desc, "PASS" if run_unit(node) else "FAIL")
+    if not live:
+        return (n, "live", LIVE[n], "SKIP (needs topology)")
+    try:
+        return (n, "live", LIVE[n], "PASS" if live_probe(n) else "FAIL")
+    except NotImplementedError:
+        return (n, "live", LIVE[n], "PENDING (probe not wired)")
+
+
 def main(live: bool = False) -> int:
-    rows = []
-    for n in sorted(set(UNIT) | set(LIVE)):
-        if n in UNIT:
-            desc, node = UNIT[n]
-            rows.append((n, "unit", desc, "PASS" if run_unit(node) else "FAIL"))
-        else:
-            if not live:
-                rows.append((n, "live", LIVE[n], "SKIP (needs topology)"))
-            else:
-                try:
-                    rows.append((n, "live", LIVE[n], "PASS" if live_probe(n) else "FAIL"))
-                except NotImplementedError:
-                    rows.append((n, "live", LIVE[n], "PENDING (probe not wired)"))
+    rows = [_row_for(n, live) for n in sorted(set(UNIT) | set(LIVE))]
 
     print(f"{'#':>2}  {'kind':<5}  {'result':<22}  check")
     print("-" * 78)

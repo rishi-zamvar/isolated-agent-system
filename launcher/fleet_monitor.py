@@ -103,43 +103,52 @@ def log_tail(role: str, n: int = 14):
 _DOT = {"alive": "#39d353", "stale": "#d29922", "none": "#6e7681"}
 
 
-def render() -> str:
-    now = time.time()
-    unread = unread_counts()
-    cards = []
-    for role in ROLES:
-        state, last = hb_status(role, now)
-        tail, mtime = log_tail(role)
-        loc = "Mac" if role == "orch" else "PC"
-        kind = ("HEAD" if role == "orch"
-                else "ENGINEER" if role in ENGINEERS else "LEAD")
-        u = unread.get(role, 0)
-        badge = (f'<span class="u">{u} unread</span>' if u else
-                 '<span class="u zero">0 unread</span>')
-        cards.append(f"""
+def _role_kind(role: str) -> str:
+    if role == "orch":
+        return "HEAD"
+    return "ENGINEER" if role in ENGINEERS else "LEAD"
+
+
+def _role_card(role: str, now: float, unread: dict) -> str:
+    """Render one role status card (heartbeat dot, kind/loc, unread badge, log tail)."""
+    state, last = hb_status(role, now)
+    tail, mtime = log_tail(role)
+    loc = "Mac" if role == "orch" else "PC"
+    u = unread.get(role, 0)
+    badge = (f'<span class="u">{u} unread</span>' if u else
+             '<span class="u zero">0 unread</span>')
+    return f"""
         <div class="card">
           <div class="hd">
             <span class="dot" style="background:{_DOT[state]}"></span>
             <b>{role.upper()}</b>
-            <span class="meta">{kind} · {loc}</span>
+            <span class="meta">{_role_kind(role)} · {loc}</span>
             {badge}
           </div>
           <div class="sub">hb: {state} ({_ago(last, now)}) ·
                log: {_ago(mtime, now)}</div>
           <pre>{html.escape(tail)}</pre>
-        </div>""")
+        </div>"""
 
-    rows = []
-    for e in recent_envelopes():
-        read = "✓" if e["read_at"] else "•"
-        cls = "read" if e["read_at"] else "unread"
-        rows.append(
-            f'<tr class="{cls}"><td>{e["seq"]}</td>'
-            f'<td>{html.escape(e["from_role"])}→{html.escape(e["to_role"])}</td>'
-            f'<td>{html.escape(e["type"])}</td>'
-            f'<td>{html.escape(e["event"])}</td>'
-            f'<td class="ts">{html.escape(e["created_at"] or "")}</td>'
-            f'<td class="rd">{read}</td></tr>')
+
+def _bus_row(e) -> str:
+    """Render one recent-envelope table row with read/unread styling."""
+    read = "✓" if e["read_at"] else "•"
+    cls = "read" if e["read_at"] else "unread"
+    return (
+        f'<tr class="{cls}"><td>{e["seq"]}</td>'
+        f'<td>{html.escape(e["from_role"])}→{html.escape(e["to_role"])}</td>'
+        f'<td>{html.escape(e["type"])}</td>'
+        f'<td>{html.escape(e["event"])}</td>'
+        f'<td class="ts">{html.escape(e["created_at"] or "")}</td>'
+        f'<td class="rd">{read}</td></tr>')
+
+
+def render() -> str:
+    now = time.time()
+    unread = unread_counts()
+    cards = [_role_card(role, now, unread) for role in ROLES]
+    rows = [_bus_row(e) for e in recent_envelopes()]
     bus = "\n".join(rows) or '<tr><td colspan="6">no messages yet</td></tr>'
 
     return f"""<!doctype html><html><head><meta charset="utf-8">

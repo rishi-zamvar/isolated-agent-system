@@ -91,6 +91,26 @@ def bloat(commits: list[dict]) -> dict:
             "score": zero_bloat_score(commits)}
 
 
+def _int(x: str) -> int:
+    """git numstat uses '-' for binary files; treat any non-digit as 0."""
+    return int(x) if x.isdigit() else 0
+
+
+def _new_commit(line: str) -> dict:
+    """Start a commit record from a `__C__<sha>|<ts>` header line."""
+    sha, _, ts = line[5:].partition("|")
+    return {"sha": sha, "ts": _int(ts), "files": []}
+
+
+def _file_row(line: str) -> dict | None:
+    """Parse one numstat `<add>\\t<del>\\t<path>` row, or None if not that shape."""
+    parts = line.split("\t")
+    if len(parts) != 3:
+        return None
+    a, d, path = parts
+    return {"path": path, "add": _int(a), "del": _int(d)}
+
+
 def parse_numstat(text: str) -> list[dict]:
     """Parse `git log --numstat --format=__C__%H|%ct` output into commits."""
     commits: list[dict] = []
@@ -99,15 +119,11 @@ def parse_numstat(text: str) -> list[dict]:
         if line.startswith("__C__"):
             if cur:
                 commits.append(cur)
-            sha, _, ts = line[5:].partition("|")
-            cur = {"sha": sha, "ts": int(ts) if ts.isdigit() else 0, "files": []}
+            cur = _new_commit(line)
         elif line.strip() and cur is not None:
-            parts = line.split("\t")
-            if len(parts) == 3:
-                a, d, path = parts
-                cur["files"].append({"path": path,
-                                     "add": int(a) if a.isdigit() else 0,
-                                     "del": int(d) if d.isdigit() else 0})
+            row = _file_row(line)
+            if row is not None:
+                cur["files"].append(row)
     if cur:
         commits.append(cur)
     return commits

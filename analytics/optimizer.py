@@ -14,6 +14,28 @@ from gates.complexity import gate as cc_gate, score_functions
 
 _CC_CEILING = 10
 
+# Directories whose .py files are NOT the repo's own source: VCS metadata, build
+# caches, vendored deps, and pytest temp trees (the latter hold synthetic high-CC
+# fixtures that otherwise inflate the live open_count metric). A path component
+# matching any of these — or any hidden dotted dir — is skipped.
+_SKIP_DIRS = frozenset({
+    ".git", "__pycache__", "node_modules", ".pytest_cache",
+    ".pytest_tmp", ".pt", ".venv", "venv", ".mypy_cache", ".tox", "build", "dist",
+})
+
+
+def _is_source_path(path: Path, root: Path) -> bool:
+    """True unless any directory component between root and path is a skip dir
+    (or a hidden dotted dir). Keeps open_count scoped to the repo's real source."""
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        rel = path
+    for part in rel.parts[:-1]:  # exclude the filename itself
+        if part in _SKIP_DIRS or (part.startswith(".") and part not in (".", "..")):
+            return False
+    return True
+
 
 def scan_source(filepath: str, source: str, ceiling: int = _CC_CEILING) -> list[dict]:
     """Scan a single source string; return a finding dict per violating function."""
@@ -65,6 +87,8 @@ def open_count(repo_path: str | None, ceiling: int = _CC_CEILING) -> int:
         return 0
     total = 0
     for path in root.rglob("*.py"):
+        if not _is_source_path(path, root):
+            continue
         try:
             source = path.read_text(encoding="utf-8", errors="replace")
         except OSError:

@@ -13,12 +13,10 @@ class ValidationError(ValueError):
 _REQUIRED = ("type", "from_role", "to_role", "event")
 
 
-def build(fields: dict) -> dict:
-    """Validate and complete an outbound envelope. Assigns id/created_at/status.
-
-    Raises ValidationError on: missing field, unknown role/type, R2 violation
-    (recipient does not consume the type), or a bare ACCEPT (empty verified[]).
-    """
+def _validate(fields: dict) -> None:
+    """Enforce every shim rule on an outbound envelope; raise ValidationError on the
+    first violation. Pulled out of build() so build() stays under the CC ceiling and
+    the rule set has a single home."""
     for k in _REQUIRED:
         if not fields.get(k):
             raise ValidationError(f"missing required field: {k}")
@@ -37,6 +35,17 @@ def build(fields: dict) -> dict:
     if payload.get("verdict") == "ACCEPT" and not payload.get("verified"):
         raise ValidationError(
             "an ACCEPT must record what you reproduced and how (verified[])")
+
+
+def build(fields: dict) -> dict:
+    """Validate and complete an outbound envelope. Assigns id/created_at/status.
+
+    Raises ValidationError on: missing field, unknown role/type, R2 violation
+    (recipient does not consume the type), or a bare ACCEPT (empty verified[]).
+    """
+    _validate(fields)
+    frm, to, mtype = fields["from_role"], fields["to_role"], fields["type"]
+    payload = fields.get("payload", {}) or {}
 
     return {
         "id": fields.get("id") or str(uuid.uuid4()),
