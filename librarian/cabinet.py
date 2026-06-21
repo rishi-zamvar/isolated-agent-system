@@ -47,6 +47,14 @@ CREATE TABLE IF NOT EXISTS selections (
     backend    TEXT,               -- fastembed | lexical
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS recalls (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+    query      TEXT NOT NULL,
+    hits       INTEGER NOT NULL,
+    top_score  REAL,
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -220,6 +228,74 @@ def open_compactions(path: Path) -> list[sqlite3.Row]:
             "SELECT * FROM compactions WHERE after_in IS NULL ORDER BY seq ASC"))
     finally:
         con.close()
+
+
+def recent_facts(path: Path, limit: int = 100, role: str | None = None) -> list[dict]:
+    """The actual archived span text (newest first) — what the Library tab shows."""
+    init(path)
+    con = _connect(path)
+    try:
+        q = ("SELECT seq, role, topic, kind, durability, body, created_at, "
+             "(embedding IS NOT NULL) AS embedded FROM facts")
+        params: list = []
+        if role is not None:
+            q += " WHERE role = ?"
+            params.append(role)
+        q += " ORDER BY seq DESC LIMIT ?"
+        params.append(limit)
+        return [dict(r) for r in con.execute(q, params)]
+    finally:
+        con.close()
+
+
+def library_stats(path: Path) -> dict:
+    """Everything we know about the archive: counts by role/durability/kind, total
+    text volume (chars + est tokens), and embedding coverage."""
+    init(path)
+    con = _connect(path)
+    try:
+        rows = list(con.execute("SELECT role, kind, durability, body, embedding FROM facts"))
+    finally:
+        con.close()
+    s = {"spans": len(rows), "chars": 0, "embedded": 0,
+         "by_role": {}, "by_durability": {}, "by_kind": {}}
+    for r in rows:
+        s["chars"] += len(r["body"] or "")
+        if r["embedding"]:
+            s["embedded"] += 1
+        s["by_role"][r["role"]] = s["by_role"].get(r["role"], 0) + 1
+        d = r["durability"] or "unclassified"
+        s["by_durability"][d] = s["by_durability"].get(d, 0) + 1
+        s["by_kind"][r["kind"]] = s["by_kind"].get(r["kind"], 0) + 1
+    s["est_tokens"] = s["chars"] // 4
+    s["embed_pct"] = round(100 * s["embedded"] / s["spans"], 1) if s["spans"] else 0
+    return s
+
+
+def record_recall(path: Path, query: str, hits: int, top_score: float | None) -> None:
+    """Log a recall so we can measure how often the archive is consulted + hit quality."""
+    init(path)
+    con = _connect(path)
+    try:
+        con.execute("INSERT INTO recalls (query, hits, top_score, created_at) "
+                    "VALUES (?, ?, ?, ?)", (query, hits, top_score, _now_iso()))
+        con.commit()
+    finally:
+        con.close()
+
+
+def recall_stats(path: Path) -> dict:
+    init(path)
+    con = _connect(path)
+    try:
+        rows = list(con.execute("SELECT query, hits, top_score, created_at "
+                                "FROM recalls ORDER BY seq DESC"))
+    finally:
+        con.close()
+    scores = [r["top_score"] for r in rows if r["top_score"] is not None]
+    return {"recalls": len(rows),
+            "avg_top": round(sum(scores) / len(scores), 3) if scores else 0,
+            "recent": [dict(r) for r in rows[:10]]}
 
 
 def record_selection(path: Path, role: str, structural: int, relevant: int,

@@ -111,3 +111,31 @@ def test_daemon_semantic_path_pins_structural_and_logs_selection(tmp_path):
     st = cabinet.selection_stats(cab)
     assert st["structural"] >= 1 and st["selections"] == 1
     assert st["backend"] == "lexical"
+
+
+# --------------------------------------------------------------- library ----
+
+def test_library_stats_and_recent_facts(tmp_path):
+    p = tmp_path / "cab.db"
+    cabinet.init(p)
+    e = embed.Embedder(prefer="lexical")
+    cabinet.file_fact(p, "be", "GRDB schema with 27 migrations", kind="snip",
+                      durability="structural")
+    cabinet.file_fact(p, "be", "PR: oauth refresh fix details", kind="snip",
+                      durability="episodic", embedding=e.encode_one("oauth refresh"))
+    st = cabinet.library_stats(p)
+    assert st["spans"] == 2
+    assert st["by_durability"]["structural"] == 1 and st["by_durability"]["episodic"] == 1
+    assert st["embedded"] == 1 and st["chars"] > 0
+    recent = cabinet.recent_facts(p, limit=10)
+    assert recent[0]["body"] == "PR: oauth refresh fix details"  # newest first
+    assert recent[0]["embedded"] == 1
+
+
+def test_recall_logging(tmp_path):
+    p = tmp_path / "cab.db"
+    cabinet.init(p)
+    cabinet.record_recall(p, "oauth flow", hits=3, top_score=0.71)
+    rs = cabinet.recall_stats(p)
+    assert rs["recalls"] == 1 and rs["avg_top"] == 0.71
+    assert rs["recent"][0]["query"] == "oauth flow"
