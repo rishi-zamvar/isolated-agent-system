@@ -40,6 +40,48 @@ def _ws_sig(repo: str):
     except Exception:
         return None
 
+
+_CODE_EXT = (".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c",
+             ".cpp", ".h", ".sh", ".ps1", ".cmd", ".sql", ".css", ".html", ".json")
+_DOC_EXT = (".md", ".txt", ".rst")
+_DOC_DIRS = (".planning/", "docs/", "specs/")
+
+
+def _edit_kind(repo: str, sig0) -> str:
+    """Classify what THIS run changed in the worktree: 'code', 'docs', 'other', or ''.
+
+    Attribution is only clean when the agent has its OWN git worktree — otherwise another
+    agent's concurrent commit moves HEAD here and gets misattributed. With per-agent
+    worktrees, the dirty set + the agent's own commits are exactly its work, so a planner
+    writing a doc reads as 'docs' (its real goal), not 'code'."""
+    if not sig0:
+        return ""
+    head0 = sig0.split("\n", 1)[0]
+    paths: set[str] = set()
+    try:
+        porc = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                              capture_output=True, text=True, timeout=8)
+        for ln in porc.stdout.splitlines():
+            p = ln[3:].strip().split(" -> ")[-1]
+            if p:
+                paths.add(p)
+        head1 = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                               capture_output=True, text=True, timeout=8).stdout.strip()
+        if head1 and head1 != head0:
+            diff = subprocess.run(["git", "-C", repo, "diff", "--name-only", head0, head1],
+                                  capture_output=True, text=True, timeout=8)
+            paths.update(p for p in diff.stdout.splitlines() if p)
+    except Exception:
+        return ""
+    if not paths:
+        return ""
+    if any(p.lower().endswith(_CODE_EXT) for p in paths):
+        return "code"
+    if any(any(d in p.lower() for d in _DOC_DIRS) or p.lower().endswith(_DOC_EXT)
+           for p in paths):
+        return "docs"
+    return "other"
+
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
     '`agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox '
@@ -201,7 +243,7 @@ def _service_wake(role: str, runner, briefs_dir, status_dir, store_path) -> int:
 
 
 def _log_usage(token_log: Path, role: str, d: dict, sid: str,
-               edited: bool, compacted: bool) -> None:
+               edited: bool, compacted: bool, kind: str = "") -> None:
     u = d.get("usage") or {}
     in_fresh = u.get("input_tokens") or 0
     in_cache = u.get("cache_read_input_tokens") or 0
@@ -213,6 +255,7 @@ def _log_usage(token_log: Path, role: str, d: dict, sid: str,
            "in_cache_create": u.get("cache_creation_input_tokens") or 0,
            "out": u.get("output_tokens") or 0,
            "cost": d.get("total_cost_usd"), "edited": edited,
+           "edited_code": (kind == "code"), "edit_kind": kind,
            "dur_ms": d.get("duration_ms"), "turns": d.get("num_turns"),
            "compacted": compacted, "session_id": sid, "ts": time.time()}
     try:
@@ -245,6 +288,7 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
             stop.set()
         sig1 = _ws_sig(_WORKREPO)
         edited = _detect_edited(sig0, sig1)          # git-only fallback before JSON parse
+        kind = _edit_kind(_WORKREPO, sig0)           # code vs docs (clean per-worktree)
         try:
             d = json.loads(r.stdout or "{}")
             sid = d.get("session_id") or ""
@@ -254,7 +298,7 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                 except OSError:
                     pass
             edited = _detect_edited(sig0, sig1, json.dumps(d))
-            _log_usage(token_log, role, d, sid, edited, compacted)
+            _log_usage(token_log, role, d, sid, edited, compacted, kind)
             print(d.get("result", ""), flush=True)
         except Exception:
             print(r.stdout or "", flush=True)
