@@ -82,6 +82,42 @@ def _edit_kind(repo: str, sig0) -> str:
         return "docs"
     return "other"
 
+
+_PLANNERS = {"orch", "pm", "tl"}
+
+
+def _log_code_touch(role: str, repo: str, sig0, ledger) -> None:
+    """Audit ledger — every CODE touch recorded with the REASON WHY (the commit message)
+    + an out-of-lane flag for planners. Lets us see who touched code and why; a planner
+    touch (pm/tl) is flagged because it should be the rare stuck-ticket exception."""
+    head0 = (sig0 or "").split("\n", 1)[0]
+    files, reason = [], ""
+    try:
+        porc = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                              capture_output=True, text=True, timeout=8).stdout
+        files = [ln[3:].strip().split(" -> ")[-1] for ln in porc.splitlines()
+                 if ln[3:].strip().lower().endswith(_CODE_EXT)]
+        head1 = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                               capture_output=True, text=True, timeout=8).stdout.strip()
+        if head1 and head1 != head0:
+            msgs = subprocess.run(["git", "-C", repo, "log", "--format=%s", f"{head0}..{head1}"],
+                                  capture_output=True, text=True, timeout=8).stdout.strip()
+            reason = msgs.replace("\n", "; ")
+            diff = subprocess.run(["git", "-C", repo, "diff", "--name-only", head0, head1],
+                                  capture_output=True, text=True, timeout=8).stdout
+            files += [p for p in diff.splitlines() if p.lower().endswith(_CODE_EXT)]
+        if not reason:
+            reason = "(uncommitted code change — NO reason/commit message recorded)"
+    except Exception:
+        return
+    rec = {"ts": time.time(), "role": role, "files": sorted(set(files))[:10],
+           "reason": reason[:300], "out_of_lane": role in _PLANNERS}
+    try:
+        with open(ledger, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except OSError:
+        pass
+
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
     '`agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox '
@@ -289,6 +325,8 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
         sig1 = _ws_sig(_WORKREPO)
         edited = _detect_edited(sig0, sig1)          # git-only fallback before JSON parse
         kind = _edit_kind(_WORKREPO, sig0)           # code vs docs (clean per-worktree)
+        if kind == "code":                           # audit: log every code touch + reason
+            _log_code_touch(role, _WORKREPO, sig0, Path(token_log).parent / "code_touches.jsonl")
         try:
             d = json.loads(r.stdout or "{}")
             sid = d.get("session_id") or ""
