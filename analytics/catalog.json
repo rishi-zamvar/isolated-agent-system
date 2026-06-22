@@ -1,0 +1,738 @@
+[
+  {
+    "key": "cache_hit",
+    "category": "Token Economy",
+    "label": "cache-hit",
+    "unit": "percent",
+    "definition": "Share of input tokens served from the prompt cache rather than billed at the full fresh-input rate.",
+    "so_what": "Below 25 % means sessions run cold \u2014 every un-cached token costs 5\u201310\u00d7 more than a warm hit. The single biggest lever on total API spend.",
+    "display": "timeseries",
+    "insight": {
+      "warn_if": "< 0.25",
+      "good_if": "> 0.6",
+      "warn_msg": "Sessions running cold \u2014 warm them to cut input cost."
+    },
+    "source": "economy.cache_hit_series"
+  },
+  {
+    "key": "burn_usd_per_hr",
+    "category": "Token Economy",
+    "label": "burn $/hr",
+    "unit": "usd",
+    "definition": "Total API cost divided by observed session span in hours \u2014 the fleet's live run rate.",
+    "so_what": "Tracks runway against usage limits. Spikes signal a runaway agent or an unexpectedly large cold-cache context.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 5",
+      "warn_msg": "Burn rate elevated \u2014 check for runaway runs or cold-cache sessions."
+    },
+    "source": "economy.burn.usd_per_hr"
+  },
+  {
+    "key": "waste_pct",
+    "category": "Token Economy",
+    "label": "idle-run %",
+    "unit": "percent",
+    "definition": "Percentage of runs that produced no file edit \u2014 context re-reads with no committed output.",
+    "so_what": "Idle/no-edit runs are largely the cost-saving gate working \u2014 skipped or cheap wakes are WHY burn is low. Not a problem on its own; watch burn $/hr (the real cost KPI) instead.",
+    "display": "gauge",
+    "insight": {
+      "warn_msg": ""
+    },
+    "source": "economy.waste.no_edit_pct"
+  },
+  {
+    "key": "haiku_cost_pct",
+    "category": "Token Economy",
+    "label": "Haiku cost %",
+    "unit": "percent",
+    "definition": "Percentage of total token spend going to the Haiku tier (cheapest model).",
+    "so_what": "Low Haiku % means lightweight tasks are escalating to expensive tiers unnecessarily. Routine tasks should run on Haiku; heavy reasoning on Opus.",
+    "display": "donut",
+    "insight": {
+      "warn_if": "< 20",
+      "warn_msg": "Low Haiku usage \u2014 lightweight tasks may be over-tiered."
+    },
+    "source": "economy.model_mix.haiku.pct"
+  },
+  {
+    "key": "verbosity",
+    "category": "Token Economy",
+    "label": "verbosity",
+    "unit": "ratio",
+    "definition": "Output tokens generated per input token consumed. Measures how much agents write relative to what they read.",
+    "so_what": "Very high verbosity bloats the context window and drives up cost on the next turn. Low verbosity usually means terse, efficient agents.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0.8",
+      "warn_msg": "Agents generating excessive output \u2014 future context and cost will balloon."
+    },
+    "source": "economy.verbosity"
+  },
+  {
+    "key": "coordination_pct",
+    "category": "Flow",
+    "label": "coordination %",
+    "unit": "percent",
+    "definition": "Percentage of bus messages that are pure coordination overhead (ACK, STATUS, NUDGE, PING, NOTE, FreeText) rather than substantive typed artifacts.",
+    "so_what": "High coordination % means the bus is congested with meta-chatter. Every coordination message is cost and latency with no product shipped.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "> 50",
+      "good_if": "< 25",
+      "warn_msg": "Over half of bus traffic is coordination overhead \u2014 look for ACK storms or polling loops."
+    },
+    "source": "flow.coordination.coord_pct"
+  },
+  {
+    "key": "hub_gini",
+    "category": "Flow",
+    "label": "hub Gini",
+    "unit": "ratio",
+    "definition": "Gini coefficient of outbound message volume across roles. 0 = all roles equally active; 1 = one role sends everything.",
+    "so_what": "High Gini flags a hub bottleneck \u2014 one role acting as traffic concentrator slows the whole fleet whenever it is busy or blocked.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0.6",
+      "good_if": "< 0.35",
+      "warn_msg": "Bus traffic highly concentrated \u2014 one role is a bottleneck."
+    },
+    "source": "flow.hub_gini"
+  },
+  {
+    "key": "handoff_p90_ms",
+    "category": "Flow",
+    "label": "handoff p90",
+    "unit": "ms",
+    "definition": "90th-percentile delay between a message being sent and first read \u2014 the tail queue latency on the bus.",
+    "so_what": "Long p90 handoff means messages pile up unread. This is the coordination tax agents pay while waiting for a reply to unblock their next action.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 30000",
+      "good_if": "< 5000",
+      "warn_msg": "Tail handoff latency high \u2014 agents waiting too long for replies."
+    },
+    "source": "flow.handoff.p90_ms"
+  },
+  {
+    "key": "cycle_time_avg_ms",
+    "category": "Flow",
+    "label": "avg cycle",
+    "unit": "ms",
+    "definition": "Average time from first to last message on a ticket thread (correlation_id group) in milliseconds.",
+    "so_what": "Long average cycle time means tickets take many turns to resolve \u2014 caused by rework, handoff delays, or stuck challenges.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 1800000",
+      "warn_msg": "Tickets averaging over 30 min \u2014 check for rework or stuck handoffs."
+    },
+    "source": "flow.cycle_time.avg_ms"
+  },
+  {
+    "key": "bottleneck_depth",
+    "category": "Flow",
+    "label": "queue depth",
+    "unit": "count",
+    "definition": "Depth of the deepest unread inbox \u2014 the number of messages waiting in the busiest blocked role's queue.",
+    "so_what": "Rising queue depth on a single role is the first signal that an agent is stuck, slow, or ignoring its inbox.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 5",
+      "warn_msg": "A role has a deep unread queue \u2014 agent may be stuck or idle."
+    },
+    "source": "flow.bottleneck.depth"
+  },
+  {
+    "key": "rework_count",
+    "category": "Flow",
+    "label": "rework events",
+    "unit": "count",
+    "definition": "Total REVISED + CHALLENGE + REJECT + ESCALATE events on the bus \u2014 the aggregate rework signal.",
+    "so_what": "Each rework event is a failed first-pass. High rework drives up cycle time, API cost, and coordination overhead.",
+    "display": "bar",
+    "insight": {
+      "warn_if": "> 10",
+      "warn_msg": "High rework \u2014 check AC clarity, TDD discipline, and first-pass quality."
+    },
+    "source": "flow.rework.total"
+  },
+  {
+    "key": "bloat_score",
+    "category": "Zero-Bloat",
+    "label": "zero-bloat score",
+    "unit": "count",
+    "definition": "0\u2013100 composite of code permanence, low file thrash, healthy test ratio, zero dep growth, and compact diff size. 100 = leanest.",
+    "so_what": "Below 60 means the codebase is accumulating dead rewrites, bloated diffs, or dependency sprawl \u2014 direct NORMS \u00a71 violations.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "< 60",
+      "good_if": "> 80",
+      "warn_msg": "Zero-bloat score low \u2014 check for thrash, dep growth, or thin test ratio."
+    },
+    "source": "bloat.score"
+  },
+  {
+    "key": "dep_growth",
+    "category": "Zero-Bloat",
+    "label": "dep lines added",
+    "unit": "count",
+    "definition": "Lines added to dependency manifests (requirements.txt, package.json, pyproject.toml, etc.) in recent commits.",
+    "so_what": "Every dep line is a new external surface and a future upgrade burden. NORMS \u00a71 mandates justifying each new dependency.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0",
+      "warn_msg": "New dependency added \u2014 confirm it's justified and no stdlib alternative exists."
+    },
+    "source": "bloat.dep_growth"
+  },
+  {
+    "key": "test_ratio",
+    "category": "Zero-Bloat",
+    "label": "test:code ratio",
+    "unit": "ratio",
+    "definition": "Lines added to test files divided by lines added to non-test code in recent commits.",
+    "so_what": "Below 0.5 means more code shipped than test coverage \u2014 a TDD deficit. NORMS \u00a73: failing test before logic, always.",
+    "display": "bar",
+    "insight": {
+      "warn_if": "< 0.5",
+      "good_if": "> 0.75",
+      "warn_msg": "Test coverage lagging \u2014 new code outpacing tests."
+    },
+    "source": "bloat.test_ratio"
+  },
+  {
+    "key": "thrash_frac",
+    "category": "Zero-Bloat",
+    "label": "file thrash",
+    "unit": "ratio",
+    "definition": "Fraction of touched files that were modified in more than one commit in recent history \u2014 the rewrite/rework noise signal.",
+    "so_what": "High thrash means the same files are rewritten repeatedly. This is wasted churn that NORMS \u00a71 targets: get it right the first time.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "> 0.4",
+      "good_if": "< 0.15",
+      "warn_msg": "High file thrash \u2014 many files rewritten multiple times recently."
+    },
+    "source": "bloat.thrash.frac"
+  },
+  {
+    "key": "diff_churn",
+    "category": "Zero-Bloat",
+    "label": "diff churn",
+    "unit": "count",
+    "definition": "Total lines added plus deleted across recent commits \u2014 the raw diff size signal.",
+    "so_what": "Large diffs are harder to review, more likely to hide bugs, and more expensive to revert. Smaller, focused changes are the NORMS \u00a71 target.",
+    "display": "bar",
+    "insight": {
+      "warn_if": "> 500",
+      "warn_msg": "Large diff \u2014 consider splitting the change into focused units."
+    },
+    "source": "bloat.churn"
+  },
+  {
+    "key": "ijw_score",
+    "category": "IJW",
+    "label": "IJW score",
+    "unit": "count",
+    "definition": "0\u2013100 composite of one-shot success rate, cache-hit, zero-bloat score, and low rework. The headline 'it just works' signal for the fleet.",
+    "so_what": "The single number that proves the fleet is working correctly and efficiently. Below 60 means something systemic is wrong \u2014 the sub-metrics show where.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 60",
+      "good_if": "> 80",
+      "warn_msg": "IJW score low \u2014 check one-shot rate, cache-hit, and rework count."
+    },
+    "source": "ijw.score"
+  },
+  {
+    "key": "one_shot_rate",
+    "category": "IJW",
+    "label": "one-shot %",
+    "unit": "percent",
+    "definition": "Percentage of ticket threads that closed with zero rework events \u2014 no REVISED, CHALLENGE, REJECT, or ESCALATE.",
+    "so_what": "The cleanest proof that agents get it right first time. Low one-shot rate is expensive: each retry pays context re-read cost plus API cost.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 50",
+      "good_if": "> 80",
+      "warn_msg": "Over half of tickets needed rework \u2014 first-pass quality is low."
+    },
+    "source": "ijw.one_shot.rate"
+  },
+  {
+    "key": "autonomy_index",
+    "category": "IJW",
+    "label": "autonomy %",
+    "unit": "percent",
+    "definition": "Percentage of bus traffic that flowed agent-to-agent without a human-in-the-loop message or CONVERSE event.",
+    "so_what": "High autonomy means the fleet self-coordinates. Low autonomy signals excessive human intervention or agents that can't proceed without hand-holding.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 70",
+      "good_if": "> 90",
+      "warn_msg": "Low autonomy \u2014 humans intervening frequently. Check for stuck agents or trust gaps."
+    },
+    "source": "ijw.autonomy"
+  },
+  {
+    "key": "cost_per_ticket",
+    "category": "IJW",
+    "label": "$/ticket",
+    "unit": "usd",
+    "definition": "Total API cost divided by number of resolved ticket threads \u2014 the unit economics of fleet output.",
+    "so_what": "Rising $/ticket is the early warning that rework, idle runs, or cold cache is eroding leverage. The trend matters more than the absolute value.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 2",
+      "warn_msg": "High cost per ticket \u2014 investigate rework, cold-cache, or runaway runs."
+    },
+    "source": "ijw.cost_per_outcome.per_ticket"
+  },
+  {
+    "key": "optimizer_open",
+    "category": "Optimizer",
+    "label": "open CC violations",
+    "unit": "count",
+    "definition": "Count of functions currently exceeding the cyclomatic complexity ceiling (CC > 10), as detected by the Optimizer agent on merge.",
+    "so_what": "Each violation is complexity debt. NORMS \u00a71: optimal complexity is the bar. Open violations mean real risk of bugs hiding in hard-to-test high-CC paths.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0",
+      "warn_msg": "Open complexity violations \u2014 extract helpers to reduce CC to \u226410."
+    },
+    "source": "optimizer.open_count"
+  },
+  {
+    "key": "challenge_rate",
+    "category": "Quality",
+    "label": "challenge rate",
+    "unit": "ratio",
+    "definition": "Fleet-average share of ReviewVerdict messages that are CHALLENGE events \u2014 the critical review signal.",
+    "so_what": "Near-zero challenge rate is a rubber-stamp smell (NORMS \u00a73 verify duty). Sustained high rate means recurring upstream quality issues.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "< 0.05",
+      "warn_msg": "Challenge rate very low \u2014 verify duty may not be active. Near-zero is the rubber-stamp smell."
+    },
+    "source": "quality.challenge_rate"
+  },
+  {
+    "key": "accept_verified_pct",
+    "category": "Quality",
+    "label": "cited accepts %",
+    "unit": "ratio",
+    "definition": "Share of ACCEPT verdicts that recorded a non-empty verified[] list \u2014 proof that the reviewer reproduced the claim.",
+    "so_what": "Unverified accepts (empty verified[]) are bare approvals, which PM discipline forbids. Low % means reviews are cursory, not reproductive.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.8",
+      "good_if": "> 0.95",
+      "warn_msg": "Many accepts lack evidence. Per norms: no bare approvals \u2014 empty verified[] is a defect."
+    },
+    "source": "quality.accept_with_verification"
+  },
+  {
+    "key": "context_saved_tokens",
+    "category": "Librarian",
+    "label": "context saved",
+    "unit": "tokens",
+    "definition": "Total input tokens removed by Librarian compaction across all agents \u2014 the cumulative working-set reduction.",
+    "so_what": "Every token the Librarian removes is a token not re-billed on the next turn. This directly reduces burn rate and improves cache-hit ratio.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 1000",
+      "good_if": "> 10000",
+      "warn_msg": "Librarian saving few tokens \u2014 agents may not be compacting or the daemon is idle."
+    },
+    "source": "librarian.compaction.tokens_saved"
+  },
+  {
+    "key": "librarian_snipped_pct",
+    "category": "Librarian",
+    "label": "snipped %",
+    "unit": "percent",
+    "definition": "Share of episodic context spans that were filed to the cabinet (snipped) rather than kept in the active working set.",
+    "so_what": "Low snipped % means agents are carrying bloated histories. The Librarian exists to keep the working set lean \u2014 if it's not snipping, contexts bloat.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "< 10",
+      "good_if": "> 40",
+      "warn_msg": "Librarian snipping little \u2014 agents may be carrying unnecessarily large contexts."
+    },
+    "source": "librarian.selections.snipped_pct"
+  },
+  {
+    "key": "recall_count",
+    "category": "Librarian",
+    "label": "context recalls",
+    "unit": "count",
+    "definition": "Number of context recall lookups the Librarian has served \u2014 how often agents retrieve previously filed context.",
+    "so_what": "Low recall count with high compaction means the Librarian is filing but nothing is being retrieved \u2014 recall pathways may be underused or broken.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 1",
+      "warn_msg": "Zero recalls \u2014 filed context is not being retrieved. Check recall integration."
+    },
+    "source": "librarian.recall.count"
+  },
+  {
+    "key": "librarian_removed_tokens",
+    "category": "Librarian",
+    "label": "Tokens Removed",
+    "unit": "tokens",
+    "definition": "Total tokens removed from context by the Librarian agent across all compaction events in this session.",
+    "so_what": "More removed tokens with high precision means the Librarian is trimming efficiently \u2014 correct things removed. High removed_tokens with low precision signals over-snipping: wrong content is being cut, forcing future recalls.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "== 0",
+      "good_if": "> 0"
+    },
+    "source": "librarian.relevance_efficiency.removed_tokens"
+  },
+  {
+    "key": "librarian_recalls",
+    "category": "Librarian",
+    "label": "Recalls",
+    "unit": "count",
+    "definition": "Total number of recall events triggered during this session \u2014 each recall means a previously snipped context item was needed again.",
+    "so_what": "A recall is a MISS: the Librarian removed something that was subsequently needed. High recall count means context was over-snipped \u2014 wrong things removed. Zero recalls is optimal.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0",
+      "good_if": "== 0"
+    },
+    "source": "librarian.relevance_efficiency.recalls"
+  },
+  {
+    "key": "librarian_recalls_per_compaction",
+    "category": "Librarian",
+    "label": "Recalls / Compaction",
+    "unit": "ratio",
+    "definition": "Average recalls per compaction event: total recalls divided by total compactions.",
+    "so_what": "Normalises recall rate to compaction volume. A rising ratio means the Librarian is systematically snipping relevant content \u2014 not a one-off miss but a pattern. Near zero is healthy.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 0.1",
+      "good_if": "== 0"
+    },
+    "source": "librarian.relevance_efficiency.recalls_per_compaction"
+  },
+  {
+    "key": "librarian_precision",
+    "category": "Librarian",
+    "label": "Precision",
+    "unit": "ratio",
+    "definition": "Fraction of removed tokens that were correctly removed (not subsequently recalled): precision = 1 - (recalled_tokens / removed_tokens).",
+    "so_what": "Precision is the Librarian quality score. 1.0 = perfect \u2014 nothing removed was needed again. Below 0.85 = context over-snipped: wrong things cut, forcing recalls that add latency and token cost.",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.85",
+      "good_if": ">= 0.9"
+    },
+    "source": "librarian.relevance_efficiency.precision"
+  },
+  {
+    "key": "librarian_recalls_by_role",
+    "category": "Librarian",
+    "label": "Recalls by Role",
+    "unit": "count",
+    "definition": "Per-agent recall counts: how many recalls each agent role triggered during this session.",
+    "so_what": "Surfaces which agents are driving recalls. An agent with disproportionately high recall count indicates its working context is being over-snipped \u2014 the Librarian may be misclassifying that agent's relevant content as removable.",
+    "display": "bar",
+    "insight": {
+      "warn_if": "> 0",
+      "good_if": "== 0",
+      "warn_msg": "One or more agent roles triggered recalls \u2014 check per-role breakdown for outliers"
+    },
+    "source": "librarian.recall_stats.by_role"
+  },
+  {
+    "key": "librarian_ideal",
+    "category": "Librarian",
+    "label": "Ideal Mode",
+    "unit": "count",
+    "definition": "Indicator of ideal Librarian operation: 1 when precision >= 0.9 and removed_tokens > 0; 0 otherwise. Re-modelled from boolean (cabinet.py:339) as count 0/1.",
+    "so_what": "Ideal mode = high removed_tokens AND precision >= 0.9. Confirms the Librarian is aggressively and accurately pruning context. When 0: either pruning too conservative (low removed_tokens) or too imprecise (precision < 0.9).",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "== 0",
+      "good_if": "== 1"
+    },
+    "source": "librarian.relevance_efficiency.ideal"
+  },
+  {
+    "key": "opus_cost_pct",
+    "category": "Token Economy",
+    "label": "Opus cost %",
+    "unit": "percent",
+    "definition": "Percentage of total API spend going to the Opus tier.",
+    "so_what": "High Opus % with low one-shot rate means expensive reasoning is not paying off. Pair with one_shot_rate to judge model ROI.",
+    "goal": "Maximize one_shot_rate while minimizing opus_cost_pct; target Opus spend < 50% of total",
+    "pair_with": "one_shot_rate",
+    "display": "donut",
+    "insight": {
+      "warn_if": "> 80",
+      "warn_msg": "Over 80% of spend on Opus — check if Sonnet/Haiku can handle more tasks"
+    },
+    "source": "economy.model_mix.opus.pct"
+  },
+  {
+    "key": "prs_per_hr",
+    "category": "Token Economy",
+    "label": "PRs/hr",
+    "unit": "count",
+    "definition": "Count of PR_OPENED events on the bus in the trailing 1-hour window.",
+    "so_what": "Pairs with cost_per_pr to reveal whether speed is cheap or expensive. Rising PRs with falling cost = efficiency gain.",
+    "goal": "Maximize prs_per_hr while cost_per_pr stays low",
+    "pair_with": "cost_per_pr",
+    "display": "kpi",
+    "source": "economy.prs_per_hr"
+  },
+  {
+    "key": "cost_per_pr",
+    "category": "Token Economy",
+    "label": "cost/PR",
+    "unit": "usd",
+    "definition": "Burn rate ($/hr) divided by PR throughput (PRs/hr). None when no PRs in the last hour.",
+    "so_what": "The unit economics of shipping code. Rising cost/PR signals rework, cold-cache, or runaway agents.",
+    "goal": "Minimize cost_per_pr; target < $5/PR",
+    "pair_with": "prs_per_hr",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 10",
+      "warn_msg": "High cost per PR — check for rework cycles or cold-cache sessions"
+    },
+    "source": "economy.cost_per_pr"
+  },
+  {
+    "key": "defects_caught_rate",
+    "category": "Quality",
+    "label": "defects caught %",
+    "unit": "ratio",
+    "definition": "CHALLENGE events confirmed by B3-rework in the same correlation-id thread / total CHALLENGE events.",
+    "so_what": "Measures review signal quality fleet-wide. Low rate means challenges are noise; high rate means reviewers are catching real issues.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "< 0.5",
+      "good_if": "> 0.75",
+      "warn_msg": "Less than half of challenges confirmed — review specificity may be low"
+    },
+    "source": "quality.defects_caught_rate"
+  },
+  {
+    "key": "pm_ticket_clarity",
+    "category": "Paired Metrics",
+    "label": "PM ticket clarity",
+    "unit": "ratio",
+    "definition": "Accepted PM-dispatched tickets with no REOPEN / total accepted. Trailing 30-day window.",
+    "so_what": "Low clarity means PM is shipping ambiguous tickets — rework traces back to underspecified ACs.",
+    "goal": "pm_ticket_clarity > 0.85; rising clarity reduces fleet-wide rework",
+    "pair_with": "pm_optimization_yield",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.85",
+      "warn_msg": "Ticket clarity low — review AC specificity for recently reopened tickets"
+    },
+    "source": "compute.pm.ticket_clarity"
+  },
+  {
+    "key": "pm_optimization_yield",
+    "category": "Paired Metrics",
+    "label": "PM opt-yield",
+    "unit": "ratio",
+    "definition": "OPTIMIZATION proposals by PM accepted in-thread / total raised. None if < 5 proposals.",
+    "so_what": "Low yield means PM proposals are not surviving TL/ORCH scrutiny — noise or missing context.",
+    "goal": "Maximize optimization_yield; target > 0.6 of proposals adopted",
+    "pair_with": "pm_ticket_clarity",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.3",
+      "good_if": "> 0.6",
+      "warn_msg": "Optimization proposals not landing — PM insight cycle needs calibration"
+    },
+    "source": "compute.pm.optimization_yield"
+  },
+  {
+    "key": "tl_review_catch",
+    "category": "Paired Metrics",
+    "label": "TL review catch",
+    "unit": "ratio",
+    "definition": "TL CHALLENGE events confirmed by B3-rework / (confirmed + defects escaped past TL ACCEPT).",
+    "so_what": "Catch rate reveals how much of the quality wall TL review actually holds. Escaped defects caught later cost far more.",
+    "goal": "tl_review_catch > 0.8; defects caught early cost less than QA or prod escapes",
+    "pair_with": "tl_design_durability",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.6",
+      "good_if": "> 0.8",
+      "warn_msg": "TL review catch low — defects leaking past architecture review"
+    },
+    "source": "compute.tl.review_catch"
+  },
+  {
+    "key": "tl_design_durability",
+    "category": "Paired Metrics",
+    "label": "TL design durability",
+    "unit": "ratio",
+    "definition": "TL-dispatched tickets landing ACCEPT without REOPEN / total TL-dispatched tickets.",
+    "so_what": "Low durability means TL specs are under-specified; engineers rework against a moving spec.",
+    "goal": "Maximize design_durability; target > 0.8 clean first-land",
+    "pair_with": "tl_review_catch",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.65",
+      "good_if": "> 0.8",
+      "warn_msg": "TL designs needing rework — spec quality or scope may be drifting"
+    },
+    "source": "compute.tl.design_durability"
+  },
+  {
+    "key": "coder_first_pass_rate",
+    "category": "Paired Metrics",
+    "label": "coder first-pass",
+    "unit": "ratio",
+    "definition": "PR_OPENED threads reaching APPROVE without B3-rework / total PR_OPENED threads. Per be/fe role.",
+    "so_what": "First-pass directly determines cycle time. Each rework cycle costs another full review-queue position.",
+    "goal": "first_pass > 0.8; quality-adjusted throughput only reported when this floor is met",
+    "pair_with": "coder_quality_adjusted_throughput",
+    "display": "list",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.85",
+      "warn_msg": "First-pass rate low — PRs being returned; check AC clarity at ticket level"
+    },
+    "source": "compute.coder.first_pass"
+  },
+  {
+    "key": "coder_quality_adjusted_throughput",
+    "category": "Paired Metrics",
+    "label": "coder QA-throughput",
+    "unit": "count",
+    "definition": "Daily PRs per role — only reported if first_pass >= 0.70. null when quality floor not met.",
+    "so_what": "Protects against gaming: throughput without quality is not a valid signal.",
+    "goal": "Maximize daily PRs while first_pass >= 0.80; throughput masked if quality floor breaks",
+    "pair_with": "coder_first_pass_rate",
+    "display": "list",
+    "source": "compute.coder.quality_adjusted_throughput"
+  },
+  {
+    "key": "qa_escape_rate",
+    "category": "Paired Metrics",
+    "label": "QA escape rate",
+    "unit": "ratio",
+    "definition": "QA ACCEPT events followed by a REOPEN in-thread / total QA ACCEPT events. Lower is better.",
+    "so_what": "Escapes that reach ORCH or prod are the most expensive defects. Rising escape rate signals QA coverage gaps.",
+    "goal": "Minimize qa_escape_rate; target < 0.1",
+    "pair_with": "qa_edge_cases_per_ticket",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "> 0.2",
+      "good_if": "< 0.05",
+      "warn_msg": "QA escape rate elevated — defects slipping past QA review"
+    },
+    "source": "compute.qa.escape_rate"
+  },
+  {
+    "key": "qa_edge_cases_per_ticket",
+    "category": "Paired Metrics",
+    "label": "QA edge cases/ticket",
+    "unit": "count",
+    "definition": "QA CHALLENGE events / threads QA reviewed. Higher = more thorough — never penalise high values.",
+    "so_what": "Many passes = thoroughness. Low edge-case coverage means QA is accepting too quickly.",
+    "goal": "Maximize edge_cases_per_ticket; target > 2 per ticket on average",
+    "pair_with": "qa_escape_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 1",
+      "good_if": "> 2",
+      "warn_msg": "QA edge-case coverage low — increase verification depth per ticket"
+    },
+    "source": "compute.qa.edge_cases_per_ticket"
+  },
+  {
+    "key": "sec_finding_precision",
+    "category": "Paired Metrics",
+    "label": "SEC precision",
+    "unit": "ratio",
+    "definition": "SEC CHALLENGE events confirmed by B3-rework in-thread / total SEC CHALLENGE events.",
+    "so_what": "Low precision means SEC review generates noise engineers must triage. High precision = signal, not noise.",
+    "goal": "Maximize finding_precision; target > 0.7 confirmed",
+    "pair_with": "sec_remediations_verified",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.4",
+      "good_if": "> 0.7",
+      "warn_msg": "SEC findings frequently unconfirmed — review specificity or false-positive rate may be high"
+    },
+    "source": "compute.sec.finding_precision"
+  },
+  {
+    "key": "sec_remediations_verified",
+    "category": "Paired Metrics",
+    "label": "SEC remediations",
+    "unit": "ratio",
+    "definition": "SEC findings where B3-rework was followed by ACCEPT in-thread / total SEC findings.",
+    "so_what": "Finding a vulnerability never fully verified as fixed is incomplete. Closure matters as much as discovery.",
+    "goal": "Maximize remediations_verified; target > 0.9 of findings fully closed",
+    "pair_with": "sec_finding_precision",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.9",
+      "warn_msg": "Security findings not fully verified as remediated — closure loop incomplete"
+    },
+    "source": "compute.sec.remediations_verified"
+  },
+  {
+    "key": "plat_pipeline_green_rate",
+    "category": "Paired Metrics",
+    "label": "PLAT pipeline green",
+    "unit": "ratio",
+    "definition": "Pipeline CI runs completing successfully / total runs. None if pipeline events not yet on bus.",
+    "so_what": "Flaky pipelines block every engineer simultaneously. Pipeline green rate multiplies fleet throughput.",
+    "goal": "Maximize pipeline_green_rate; target > 0.95",
+    "pair_with": "plat_gate_catch_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.9",
+      "good_if": "> 0.95",
+      "warn_msg": "Pipeline reliability below 90% — fleet-wide throughput multiplier is degraded"
+    },
+    "source": "compute.plat.pipeline_green"
+  },
+  {
+    "key": "plat_gate_catch_rate",
+    "category": "Paired Metrics",
+    "label": "PLAT gate precision",
+    "unit": "ratio",
+    "definition": "Gate BLOCK events confirmed as real / total BLOCK events. None if < 5 BLOCK events.",
+    "so_what": "Gates that false-block train engineers to override them. High catch rate = trusted gates.",
+    "goal": "gate_catch_rate > 0.8; false-block rate < 0.2",
+    "pair_with": "plat_pipeline_green_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.6",
+      "good_if": "> 0.8",
+      "warn_msg": "Gate false-block rate high — engineers may be learning to bypass gates"
+    },
+    "source": "compute.plat.gate_catch_rate"
+  },
+  {
+    "key": "orch_clean_deploy_rate",
+    "category": "Paired Metrics",
+    "label": "ORCH clean deploys",
+    "unit": "ratio",
+    "definition": "ORCH DEPLOYED events without ROLLBACK / total ORCH deploys. None while ROLLBACK uninstrumented.",
+    "so_what": "Rollbacks are the most expensive fleet event — they interrupt all agents and erase in-flight work.",
+    "goal": "Maximize clean_deploy_rate; target > 0.95; zero rollbacks is the ambition",
+    "pair_with": "plat_pipeline_green_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.9",
+      "good_if": "> 0.95",
+      "warn_msg": "Deploy rollback rate elevated — review PLAT pipeline gates before next deploy"
+    },
+    "source": "compute.orch.clean_deploy_rate"
+  }
+]

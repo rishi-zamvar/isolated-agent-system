@@ -118,15 +118,49 @@ def burn_rate(recs: list[dict]) -> dict:
             "span_hr": round(span_hr, 2)}
 
 
-def waste(recs: list[dict]) -> dict:
-    """Runs that produced no code edit — pure context re-reads (candidate waste).
+# Roles whose deliverable IS a code edit. Thinker roles (orch/pm/tl/qa/sec) produce
+# reasoning, review, routing and escalation — messages, not git edits — so a no-edit
+# run for them is their job, not waste. Counting them inflated waste to ~92%.
+_IMPLEMENTER_ROLES = frozenset({"be", "fe", "plat"})
 
-    Without the bus we can't see whether a message was sent, so this is an upper
-    bound; flow.idle_reads refines it by joining the bus."""
-    idle = [r for r in recs if not r.get("edited")]
+
+def waste(recs: list[dict]) -> dict:
+    """No-code-edit runs among IMPLEMENTER roles — runs that were meant to change code
+    and didn't (pure context re-reads). Scoped to be/fe/plat so the percentage answers
+    'of the runs that should have shipped code, how many produced nothing.'"""
+    impl = [r for r in recs if (r.get("role") or "") in _IMPLEMENTER_ROLES]
+    idle = [r for r in impl if not r.get("edited")]
     idle_cost = sum(r.get("cost") or 0 for r in idle)
     return {"no_edit_runs": len(idle), "no_edit_cost": round(idle_cost, 4),
-            "no_edit_pct": round(100 * len(idle) / len(recs), 1) if recs else 0}
+            "no_edit_pct": round(100 * len(idle) / len(impl), 1) if impl else 0,
+            "scope": "implementer_roles"}
+
+
+def cache_hit_series(recs: list[dict], buckets: int = 24) -> list[dict]:
+    """Cache-hit ratio bucketed over time — [{t: iso8601, value: ratio}] x buckets.
+
+    Buckets records by 'ts' (float unix epoch) into N equal windows using
+    cache_hit_ratio per bucket.  Pre-split records (only 'in', no in_fresh/in_cache)
+    degrade gracefully: treated as all-fresh so ratio=0.0 until new data lands.
+    """
+    import datetime as _dt
+    ts_vals = [r["ts"] for r in recs if r.get("ts") is not None]
+    if not ts_vals:
+        return [{"t": _dt.datetime.fromtimestamp(i * 3600, tz=_dt.timezone.utc).isoformat(),
+                 "value": 0.0}
+                for i in range(buckets)]
+    ts_min, ts_max = min(ts_vals), max(ts_vals)
+    window = (ts_max - ts_min) / buckets if ts_max > ts_min else 1.0
+    bucket_recs: list[list] = [[] for _ in range(buckets)]
+    for r in recs:
+        if r.get("ts") is None:
+            continue
+        i = min(int((r["ts"] - ts_min) / window), buckets - 1)
+        bucket_recs[i].append(r)
+    return [{"t": _dt.datetime.fromtimestamp(ts_min + i * window,
+                                              tz=_dt.timezone.utc).isoformat(),
+             "value": cache_hit_ratio(bucket_recs[i])}
+            for i in range(buckets)]
 
 
 def economy(recs: list[dict]) -> dict:
@@ -142,3 +176,38 @@ def economy(recs: list[dict]) -> dict:
         "waste": waste(recs),
         "runaway": runaway_runs(recs),
     }
+
+
+def _epoch(ts: str) -> float:
+    """Parse ISO-8601 created_at string to epoch float. O(1)."""
+    import datetime as _dt
+    try:
+        return _dt.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
+
+
+def prs_per_hr(rows: list[dict], _now: float | None = None) -> float:
+    """Count PR_OPENED bus events in trailing 1-hour window.
+
+    Proxy for merged-PR throughput. Returns 0.0 if none in window.
+    O(n) over rows.
+    """
+    import datetime as _dt
+    now = _now or _dt.datetime.now(_dt.timezone.utc).timestamp()
+    cutoff = now - 3600
+    return float(sum(1 for r in rows
+                     if r.get("type") == "PR" and r.get("event") == "PR_OPENED"
+                     and _epoch(r.get("created_at", "")) >= cutoff))
+
+
+def cost_per_pr(rows: list[dict], recs: list[dict],
+                _now: float | None = None) -> float | None:
+    """burn_usd_per_hr / prs_per_hr. None when prs_per_hr == 0 (avoid div-by-zero).
+
+    O(n) over rows and recs.
+    """
+    rate = prs_per_hr(rows, _now)
+    if not rate:
+        return None
+    return round(burn_rate(recs)["usd_per_hr"] / rate, 4)

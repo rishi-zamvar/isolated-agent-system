@@ -40,15 +40,24 @@ def test_ratio(commits: list[dict]) -> float:
     return round(test_add / code_add, 3) if code_add else 0.0
 
 
+_THRASH_MIN_CHURN = 10  # lines changed in a touch for it to count as a real rewrite
+
+
 def thrash(commits: list[dict]) -> dict:
-    """Files touched in more than one commit — rewrite/rework noise."""
-    seen: dict[str, int] = {}
+    """Files genuinely REWRITTEN across multiple commits — rework noise.
+
+    Size-weighted: a file is 'rewritten' only if it received >= 2 substantive touches
+    (each >= _THRASH_MIN_CHURN lines). A file nudged by many 1-line edits is not thrash;
+    counting it as such inflated the fraction toward 1.0 on busy worktrees."""
+    touches: dict[str, list[int]] = {}
     for c in commits:
         for f in c["files"]:
-            seen[f["path"]] = seen.get(f["path"], 0) + 1
-    multi = sum(1 for v in seen.values() if v > 1)
-    return {"files": len(seen), "rewritten": multi,
-            "frac": round(multi / len(seen), 3) if seen else 0.0}
+            churn = (f.get("add", 0) or 0) + (f.get("del", 0) or 0)
+            touches.setdefault(f["path"], []).append(churn)
+    multi = sum(1 for chs in touches.values()
+                if sum(1 for ch in chs if ch >= _THRASH_MIN_CHURN) >= 2)
+    return {"files": len(touches), "rewritten": multi,
+            "frac": round(multi / len(touches), 3) if touches else 0.0}
 
 
 def dep_growth(commits: list[dict]) -> int:
@@ -82,6 +91,26 @@ def bloat(commits: list[dict]) -> dict:
             "score": zero_bloat_score(commits)}
 
 
+def _int(x: str) -> int:
+    """git numstat uses '-' for binary files; treat any non-digit as 0."""
+    return int(x) if x.isdigit() else 0
+
+
+def _new_commit(line: str) -> dict:
+    """Start a commit record from a `__C__<sha>|<ts>` header line."""
+    sha, _, ts = line[5:].partition("|")
+    return {"sha": sha, "ts": _int(ts), "files": []}
+
+
+def _file_row(line: str) -> dict | None:
+    """Parse one numstat `<add>\\t<del>\\t<path>` row, or None if not that shape."""
+    parts = line.split("\t")
+    if len(parts) != 3:
+        return None
+    a, d, path = parts
+    return {"path": path, "add": _int(a), "del": _int(d)}
+
+
 def parse_numstat(text: str) -> list[dict]:
     """Parse `git log --numstat --format=__C__%H|%ct` output into commits."""
     commits: list[dict] = []
@@ -90,15 +119,11 @@ def parse_numstat(text: str) -> list[dict]:
         if line.startswith("__C__"):
             if cur:
                 commits.append(cur)
-            sha, _, ts = line[5:].partition("|")
-            cur = {"sha": sha, "ts": int(ts) if ts.isdigit() else 0, "files": []}
+            cur = _new_commit(line)
         elif line.strip() and cur is not None:
-            parts = line.split("\t")
-            if len(parts) == 3:
-                a, d, path = parts
-                cur["files"].append({"path": path,
-                                     "add": int(a) if a.isdigit() else 0,
-                                     "del": int(d) if d.isdigit() else 0})
+            row = _file_row(line)
+            if row is not None:
+                cur["files"].append(row)
     if cur:
         commits.append(cur)
     return commits
