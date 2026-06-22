@@ -130,3 +130,25 @@ def mark_read(path: Path, env_id: str) -> None:
         con.commit()
     finally:
         con.close()
+
+
+def mark_read_many(path: Path, env_ids: list[str]) -> None:
+    """Mark several envelopes read in a SINGLE write txn (one connect + commit).
+
+    Fewer round-trips and a smaller WAL lock window than N `mark_read` calls — the
+    drain path marks every noise envelope of a wake at once (Norm 1). Empty list is
+    a no-op."""
+    if not env_ids:
+        return
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    placeholders = ",".join("?" for _ in env_ids)
+    con = _connect(path)
+    try:
+        con.execute(
+            f"UPDATE envelopes SET read_at = ?, status = 'read' "
+            f"WHERE id IN ({placeholders})",
+            (now, *env_ids),
+        )
+        con.commit()
+    finally:
+        con.close()

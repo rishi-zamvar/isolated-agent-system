@@ -7,8 +7,17 @@ Rules under test:
   AC4  NOTE-only / RESOLVE-only wake                 -> drive_once called (regression)
   AC5  empty-unread / stale wake                     -> no spawn, nothing to mark_read
   AC6  drained wakes logged (not silently swallowed)
+
+  AC7  store access (peek + drain) is as resilient as drive_once:
+       - a transient peek error must not kill the reactor and must FALL BACK
+         to driving (never silently route an actionable wake to the drain)
+       - a transient drain-write error must not kill the reactor; the noise
+         stays unread and is retried next wake (idempotent, never dropped)
+       - store absent/unset must still DRIVE (no-store-never-drives regression)
+       - a multi-noise drain marks all read in ONE batched write txn (Norm 1)
 """
 import sys
+import sqlite3
 import datetime
 import uuid
 from pathlib import Path
@@ -305,6 +314,115 @@ def test_ac1_store_read_once_per_wake_on_noise(tmp_path):
     assert len(unread_calls) <= 1, (
         f"Expected at most 1 unread store peek per wake, got {len(unread_calls)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# AC7 — store access (peek + drain) is as resilient as drive_once
+#       (REQUEST_CHANGES round 1: reactor-store-access-unguarded)
+# ---------------------------------------------------------------------------
+
+def test_ac7_peek_error_does_not_kill_reactor_and_falls_back_to_drive(tmp_path):
+    """A transient peek failure (sqlite WAL lock) must not escape react_loop, and
+    must route to drive_once (legacy behaviour) — never silently swallow the wake
+    by routing rows=[] to the drain branch."""
+    db = tmp_path / "store.db"
+    _store.init(db)
+    # An ACK would normally be DRAINED; if the peek fails we must DRIVE instead.
+    _store.insert(db, _env("be", "ChallengeThread", "ACK"))
+
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be")
+
+    real_inbox = _store.inbox
+    state = {"n": 0}
+
+    def flaky(*a, **k):
+        # Only the unread peek is flaky; first such call raises, rest succeed.
+        if k.get("unread_only"):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise sqlite3.OperationalError("database is locked")
+        return real_inbox(*a, **k)
+
+    spawned = []
+    with patch.object(_store, "inbox", side_effect=flaky):
+        drives = agent_reactor.react_loop(
+            "be", str(wake_dir),
+            runner=lambda cmd, compacted=False: spawned.append(cmd),
+            poll=0, max_iters=1,
+            store_path=db,
+        )
+    assert drives == 1, "peek failure must fall back to the drive branch"
+    assert len(spawned) == 1, "peek failure must DRIVE, not silently drain the wake"
+
+
+def test_ac7_drain_write_error_does_not_kill_reactor(tmp_path):
+    """A transient drain-write failure must not escape react_loop; the noise stays
+    unread (idempotent retry next wake), never dropped, never crashes the reactor."""
+    db = tmp_path / "store.db"
+    _store.init(db)
+    _store.insert(db, _env("be", "ChallengeThread", "ACK"))
+
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be")
+
+    with patch.object(_store, "mark_read_many",
+                      side_effect=sqlite3.OperationalError("database is locked")):
+        # must NOT raise
+        agent_reactor.react_loop(
+            "be", str(wake_dir),
+            runner=lambda cmd, compacted=False: None,
+            poll=0, max_iters=1,
+            store_path=db,
+        )
+    # noise left unread -> retried next wake (not dropped on a transient error)
+    assert len(_store.inbox(db, "be", unread_only=True)) == 1
+
+
+def test_ac7_no_store_still_drives(tmp_path, monkeypatch):
+    """no-store-never-drives regression: with no store, the reactor must still DRIVE
+    (legacy preset-default behaviour), not fall through to the drain/skip branch."""
+    monkeypatch.delenv("AGENTCTL_STORE", raising=False)
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be")
+
+    spawned = []
+    drives = agent_reactor.react_loop(
+        "be", str(wake_dir),
+        runner=lambda cmd, compacted=False: spawned.append(cmd),
+        poll=0, max_iters=1,
+        store_path=None,
+    )
+    assert drives == 1
+    assert len(spawned) == 1
+
+
+def test_ac7_multi_noise_drain_uses_single_batched_txn(tmp_path):
+    """Norm 1: a multi-noise wake drains in ONE write txn (mark_read_many), not N
+    per-row mark_read calls each contending with the relay."""
+    db = tmp_path / "store.db"
+    _store.init(db)
+    _store.insert(db, _env("be", "ChallengeThread", "ACK"))
+    _store.insert(db, _env("be", "Ticket", "STATUS_ACK"))
+
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be")
+
+    with patch.object(_store, "mark_read_many", wraps=_store.mark_read_many) as m_many, \
+         patch.object(_store, "mark_read", wraps=_store.mark_read) as m_one:
+        agent_reactor.react_loop(
+            "be", str(wake_dir),
+            runner=lambda cmd, compacted=False: None,
+            poll=0, max_iters=1,
+            store_path=db,
+        )
+    assert m_many.call_count == 1, "drain must use a single batched write txn"
+    assert m_one.call_count == 0, "drain must not do per-row mark_read calls"
+    assert _store.inbox(db, "be", unread_only=True) == []
 
 
 def test_ac1_store_read_once_per_wake_on_actionable(tmp_path):

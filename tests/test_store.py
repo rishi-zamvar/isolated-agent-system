@@ -59,3 +59,19 @@ def test_mark_read_sets_read_at_and_status(store_path):
     store.mark_read(store_path, "a")
     rows = store.inbox(store_path, "tl", unread_only=True)
     assert rows == []
+
+
+def test_mark_read_many_marks_all_in_one_call(store_path):
+    store.init(store_path)
+    store.insert(store_path, _sample(id="a", to_role="tl"))
+    store.insert(store_path, _sample(id="b", to_role="tl"))
+    store.insert(store_path, _sample(id="c", to_role="tl"))
+    store.mark_read_many(store_path, ["a", "b", "c"])
+    assert store.inbox(store_path, "tl", unread_only=True) == []
+
+
+def test_mark_read_many_empty_is_noop(store_path):
+    store.init(store_path)
+    store.insert(store_path, _sample(id="a", to_role="tl"))
+    store.mark_read_many(store_path, [])  # must not raise, marks nothing
+    assert len(store.inbox(store_path, "tl", unread_only=True)) == 1

@@ -263,6 +263,57 @@ def heartbeat_path(wake_dir, role: str) -> Path:
     return Path(wake_dir).parent / "heartbeats" / f"{role}.hb"
 
 
+def _peek_unread(role: str, store_path):
+    """Peek the role's unread rows for the noise gate. Store access is fallible
+    (sqlite WAL: a peek can lose the lock race with the relay and raise); it must be
+    as resilient as drive_once. Returns:
+      None  -> could not read (no store, or a transient store error): caller DRIVES
+               (legacy behaviour) — never route an unknown inbox to the drain branch,
+               which would swallow a possibly-actionable wake.
+      []    -> inbox read cleanly and empty: a stale wake, nothing to do.
+      [..]  -> the unread rows to gate on."""
+    if not (store_path and Path(store_path).exists()):
+        return None
+    try:
+        return _store.inbox(Path(store_path), role, unread_only=True)
+    except Exception as e:
+        print(f"[reactor:{role}] peek error (falling back to drive): {e}", flush=True)
+        return None
+
+
+def _drain_noise(role: str, store_path, rows, drained: int) -> int:
+    """Mark a pure-noise wake's rows read in ONE batched write txn and skip the
+    spawn; return the new drained total. A drain-write error must not kill the
+    reactor — leave the noise unread so it is retried next wake (idempotent), never
+    dropped."""
+    try:
+        _store.mark_read_many(Path(store_path), [r["id"] for r in rows])
+        drained += 1
+        print(f"[reactor:{role}] noise-gate: drained {len(rows)} envelopes"
+              f" (total drained={drained})", flush=True)
+    except Exception as e:
+        print(f"[reactor:{role}] drain error: {e}", flush=True)
+    return drained
+
+
+def _handle_wake(role: str, runner, *, briefs_dir, status_dir, store_path,
+                 drained: int) -> tuple[int, int]:
+    """Process one wake: peek the inbox once (shared by the noise gate and
+    _pick_model, AC1), then drain a pure-noise wake or drive the role. Returns
+    (drives_delta, new_drained_total)."""
+    rows = _peek_unread(role, store_path)
+    if rows is not None and not rows:
+        return 0, drained                       # stale wake -> nothing to do (AC5)
+    if rows and all(r["event"] in _NOISE_EVENTS for r in rows):
+        return 0, _drain_noise(role, store_path, rows, drained)
+    try:
+        drive_once(role, runner, briefs_dir=briefs_dir, session_dir=status_dir,
+                   store_path=store_path, _peeked_rows=rows)
+    except Exception as e:  # one bad drive must not kill the reactor
+        print(f"[reactor:{role}] drive error: {e}", flush=True)
+    return 1, drained
+
+
 def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
                max_iters: int | None = None, store_path=None) -> int:
     """Watch for wakes and drive the role on each. Returns the number of drives.
@@ -291,25 +342,10 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            # Peek unread once — shared by noise gate and _pick_model (AC1).
-            rows = (_store.inbox(Path(store_path), role, unread_only=True)
-                    if store_path and Path(store_path).exists() else [])
-            if all(r["event"] in _NOISE_EVENTS for r in rows):
-                # Drain: mark_read all (no-op if rows is empty) and skip spawn.
-                for r in rows:
-                    _store.mark_read(Path(store_path), r["id"])
-                if rows:
-                    drained += 1
-                    print(f"[reactor:{role}] noise-gate: drained {len(rows)} envelopes"
-                          f" (total drained={drained})", flush=True)
-            else:
-                try:
-                    drive_once(role, runner, briefs_dir=briefs_dir,
-                               session_dir=status_dir, store_path=store_path,
-                               _peeked_rows=rows)
-                except Exception as e:  # one bad drive must not kill the reactor
-                    print(f"[reactor:{role}] drive error: {e}", flush=True)
-                drives += 1
+            d, drained = _handle_wake(role, runner, briefs_dir=briefs_dir,
+                                      status_dir=status_dir, store_path=store_path,
+                                      drained=drained)
+            drives += d
         time.sleep(poll)
         i += 1
     return drives
