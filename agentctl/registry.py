@@ -19,6 +19,7 @@ TYPES = (
     "E2ESuite", "QualityGate", "TestReport", "ReleaseCandidate", "GoDecision",
     "DeployRecord", "Telemetry", "Incident", "Postmortem", "VulnFinding",
     "Remediation", "ThreatModel", "ApprovalRequest", "ChallengeThread",
+    "PipelineRun", "CIEvent",
 )
 
 _CONSUMED_BY: dict[str, tuple[str, ...]] = {
@@ -47,6 +48,9 @@ _CONSUMED_BY: dict[str, tuple[str, ...]] = {
     "ThreatModel":        ("tl",) + ENGINEERS,
     "ApprovalRequest":    ("orch",),
     "ChallengeThread":    ALL,
+    # CI/pipeline telemetry: PLAT owns CI; PM/TL/ORCH watch pipeline health.
+    "PipelineRun":        ("plat", "pm", "tl", "orch"),
+    "CIEvent":            ("plat", "pm", "tl", "orch"),
 }
 
 
