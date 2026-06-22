@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 from agentctl import heartbeat, store as _store
-from profiles.model_presets import model_for, model_for_wake
+from profiles.model_presets import model_for, model_for_wake, _NOISE_EVENTS
 
 # the agents work in this repo; a change to its git tree across a run = "edited code"
 # (the only reliable signal — `claude -p --output-format json` omits tool calls).
@@ -141,13 +141,17 @@ def _detect_edited(sig0, sig1, text: str = "") -> bool:
                           or '"NotebookEdit"' in text or '"MultiEdit"' in text)
 
 
-def _pick_model(role: str, store_path) -> str | None:
+def _pick_model(role: str, store_path, rows=None) -> str | None:
     """Peek unread envelope types and return the escalated/downgraded model, or None
-    when the store is absent (preserves legacy behaviour — caller uses preset default)."""
-    if store_path is None or not Path(store_path).exists():
-        return None
-    te = [(r["type"], r["event"])
-          for r in _store.inbox(Path(store_path), role, unread_only=True)]
+    when the store is absent (preserves legacy behaviour — caller uses preset default).
+
+    `rows` may be pre-fetched unread rows from a prior peek; if provided the store is
+    not read again (satisfies AC1: single store read per wake)."""
+    if rows is None:
+        if store_path is None or not Path(store_path).exists():
+            return None
+        rows = _store.inbox(Path(store_path), role, unread_only=True)
+    te = [(r["type"], r["event"]) for r in rows]
     return model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
 
 
@@ -220,7 +224,7 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
 
 
 def drive_once(role: str, runner, briefs_dir=None, session_dir=None,
-               store_path=None) -> None:
+               store_path=None, _peeked_rows=None) -> None:
     """Drive one wake. If the Librarian left a carry-forward brief, run a fresh
     session seeded with it; otherwise resume the captured session (or bootstrap with
     --continue). The brief is consumed ONLY after a successful run, so a spawn failure
@@ -229,7 +233,10 @@ def drive_once(role: str, runner, briefs_dir=None, session_dir=None,
     `store_path` enables per-wake model escalation: unread envelope types are peeked
     before the drive and the highest-priority model tier is selected (Opus for
     ChallengeThread/VulnFinding/ThreatModel/ReviewVerdict, Haiku for bare routing,
-    preset default otherwise). None disables peeking (preserves legacy behaviour)."""
+    preset default otherwise). None disables peeking (preserves legacy behaviour).
+
+    `_peeked_rows` may be pre-fetched unread rows from react_loop's noise-gate peek;
+    if provided, _pick_model skips the store read (AC1: single store read per wake)."""
     bp = brief_for(briefs_dir, role)
     brief_text = None
     if bp is not None:
@@ -238,7 +245,7 @@ def drive_once(role: str, runner, briefs_dir=None, session_dir=None,
         except OSError:
             brief_text = None
     session_id = None if bp is not None else read_session(session_dir, role)
-    model = _pick_model(role, store_path)
+    model = _pick_model(role, store_path, rows=_peeked_rows)
     ret = runner(claude_cmd(role, brief_text=brief_text, session_id=session_id,
                             model=model),
                  compacted=bp is not None)
@@ -257,16 +264,18 @@ def heartbeat_path(wake_dir, role: str) -> Path:
 
 
 def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
-               max_iters: int | None = None) -> int:
+               max_iters: int | None = None, store_path=None) -> int:
     """Watch for wakes and drive the role on each. Returns the number of drives.
 
     `runner` defaults to subprocess.run; `max_iters` bounds the loop for tests
     (None = run forever). Emits a liveness heartbeat every iteration (even while
-    idle) so observers can distinguish 'reactor alive' from 'bus alive'."""
+    idle) so observers can distinguish 'reactor alive' from 'bus alive'.
+
+    `store_path` overrides the AGENTCTL_STORE env var (useful in tests)."""
     status_dir = Path(wake_dir).parent / "heartbeats"
     token_log = Path(wake_dir).parent / "token_usage.jsonl"
     briefs_dir = Path(wake_dir).parent / "briefs"  # Librarian drops carry-forwards here
-    store_path = os.environ.get("AGENTCTL_STORE")
+    store_path = store_path or os.environ.get("AGENTCTL_STORE")
     status_dir.mkdir(parents=True, exist_ok=True)
     if runner is None:
         runner = make_runner(role, token_log, status_dir)
@@ -274,6 +283,7 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
     hb.parent.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
     drives = 0
+    drained = 0
     i = 0
     while max_iters is None or i < max_iters:
         try:
@@ -281,12 +291,25 @@ def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
         except OSError:
             pass
         if pending_wakes(wake_dir, role, seen):
-            try:
-                drive_once(role, runner, briefs_dir=briefs_dir,
-                           session_dir=status_dir, store_path=store_path)
-            except Exception as e:  # one bad drive must not kill the reactor
-                print(f"[reactor:{role}] drive error: {e}", flush=True)
-            drives += 1
+            # Peek unread once — shared by noise gate and _pick_model (AC1).
+            rows = (_store.inbox(Path(store_path), role, unread_only=True)
+                    if store_path and Path(store_path).exists() else [])
+            if all(r["event"] in _NOISE_EVENTS for r in rows):
+                # Drain: mark_read all (no-op if rows is empty) and skip spawn.
+                for r in rows:
+                    _store.mark_read(Path(store_path), r["id"])
+                if rows:
+                    drained += 1
+                    print(f"[reactor:{role}] noise-gate: drained {len(rows)} envelopes"
+                          f" (total drained={drained})", flush=True)
+            else:
+                try:
+                    drive_once(role, runner, briefs_dir=briefs_dir,
+                               session_dir=status_dir, store_path=store_path,
+                               _peeked_rows=rows)
+                except Exception as e:  # one bad drive must not kill the reactor
+                    print(f"[reactor:{role}] drive error: {e}", flush=True)
+                drives += 1
         time.sleep(poll)
         i += 1
     return drives

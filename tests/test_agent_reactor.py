@@ -1,10 +1,24 @@
+import datetime
 import sys
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "launcher"))
 import agent_reactor  # noqa: E402
 
-from agentctl import wake  # noqa: E402
+from agentctl import wake, store as _store  # noqa: E402
+
+
+def _actionable_env(role):
+    return {
+        "id": str(uuid.uuid4()),
+        "type": "Ticket",
+        "from_role": "tl",
+        "to_role": role,
+        "event": "ASSIGNED",
+        "payload": {},
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
 
 
 def test_pending_wakes_returns_new_only(wake_dir):
@@ -25,13 +39,18 @@ def test_claude_cmd_is_headless_continue_with_role():
     assert "qa" in cmd[-1]  # role appears in the prompt
 
 
-def test_react_loop_drives_once_per_wake(wake_dir):
+def test_react_loop_drives_once_per_wake(wake_dir, tmp_path):
+    # Noise gate requires an actionable unread message to fire drive_once.
+    db = tmp_path / "store.db"
+    _store.init(db)
+    _store.insert(db, _actionable_env("be"))
+
     calls = []
-    # pre-seed one wake; loop a few iterations with no sleep
     wake.write_wake(wake_dir, "be", "e1")
     drives = agent_reactor.react_loop(
         "be", wake_dir, poll=0,
-        runner=lambda cmd, compacted=False: calls.append(cmd), max_iters=3)
+        runner=lambda cmd, compacted=False: calls.append(cmd),
+        max_iters=3, store_path=db)
     assert drives == 1
     assert calls and calls[0][0] == "claude"
 

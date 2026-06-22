@@ -53,6 +53,12 @@ _OPUS_TYPES = frozenset({"ChallengeThread", "VulnFinding", "ThreatModel", "Revie
 # Events that are bare acknowledgements — never trigger Opus regardless of type.
 _BARE_ACK_EVENTS = frozenset({"ACK", "STATUS_ACK", "NOTE", "RESOLVE"})
 
+# Pure-acknowledgement events that carry no retainable content.  A wake whose
+# every unread event is in this set is drained (mark_read + skip spawn) by the
+# noise gate in react_loop.  NOTE/RESOLVE are intentionally excluded: they carry
+# heads-up / terminal-state content the agent must ingest.
+_NOISE_EVENTS = frozenset({"ACK", "STATUS_ACK"})
+
 # (type, event) pairs cheap enough for Haiku — pure routing, no analysis.
 _CHEAP = frozenset({
     ("Ticket", "STATUS_ACK"),
