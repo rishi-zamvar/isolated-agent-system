@@ -24,6 +24,8 @@
         "warn_msg": { "type": "string", "minLength": 1 }
       }
     },
-    "source": { "type": "string", "minLength": 1, "description": "Dotted resolver path BE binds to a live value, e.g. 'economy.cache_hit'. Must resolve in the registry engine." }
+    "source": { "type": "string", "minLength": 1, "description": "Dotted resolver path BE binds to a live value, e.g. 'economy.cache_hit'. Must resolve in the registry engine." },
+    "goal":      { "type": "string", "minLength": 1, "description": "Optimization direction and target for this metric, e.g. 'min cost_per_pr; target < $5/PR'." },
+    "pair_with": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "Key of companion catalog entry — dashboard groups them as a pair card." }
   }
 }

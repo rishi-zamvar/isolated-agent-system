@@ -5,7 +5,7 @@
     "label": "cache-hit",
     "unit": "percent",
     "definition": "Share of input tokens served from the prompt cache rather than billed at the full fresh-input rate.",
-    "so_what": "Below 25% means sessions run cold \u2014 every un-cached token costs 5\u201310\u00d7 more than a warm hit. The single biggest lever on total API spend. The trend shows whether warming is working.",
+    "so_what": "Below 25 % means sessions run cold \u2014 every un-cached token costs 5\u201310\u00d7 more than a warm hit. The single biggest lever on total API spend.",
     "display": "timeseries",
     "insight": {
       "warn_if": "< 0.25",
@@ -34,12 +34,10 @@
     "label": "idle-run %",
     "unit": "percent",
     "definition": "Percentage of runs that produced no file edit \u2014 context re-reads with no committed output.",
-    "so_what": "High idle-run % means agents burn tokens without advancing work. Prime target for better event-driven wake scheduling (NORMS \u00a72).",
+    "so_what": "Idle/no-edit runs are largely the cost-saving gate working \u2014 skipped or cheap wakes are WHY burn is low. Not a problem on its own; watch burn $/hr (the real cost KPI) instead.",
     "display": "gauge",
     "insight": {
-      "warn_if": "> 40",
-      "good_if": "< 15",
-      "warn_msg": "Too many idle runs \u2014 agents may be polling or waking on noise."
+      "warn_msg": ""
     },
     "source": "economy.waste.no_edit_pct"
   },
@@ -321,7 +319,7 @@
   {
     "key": "accept_verified_pct",
     "category": "Quality",
-    "label": "cited accepts",
+    "label": "cited accepts %",
     "unit": "ratio",
     "definition": "Share of ACCEPT verdicts that recorded a non-empty verified[] list \u2014 proof that the reviewer reproduced the claim.",
     "so_what": "Unverified accepts (empty verified[]) are bare approvals, which PM discipline forbids. Low % means reviews are cursory, not reproductive.",
@@ -461,5 +459,280 @@
       "good_if": "== 1"
     },
     "source": "librarian.relevance_efficiency.ideal"
+  },
+  {
+    "key": "opus_cost_pct",
+    "category": "Token Economy",
+    "label": "Opus cost %",
+    "unit": "percent",
+    "definition": "Percentage of total API spend going to the Opus tier.",
+    "so_what": "High Opus % with low one-shot rate means expensive reasoning is not paying off. Pair with one_shot_rate to judge model ROI.",
+    "goal": "Maximize one_shot_rate while minimizing opus_cost_pct; target Opus spend < 50% of total",
+    "pair_with": "one_shot_rate",
+    "display": "donut",
+    "insight": {
+      "warn_if": "> 80",
+      "warn_msg": "Over 80% of spend on Opus — check if Sonnet/Haiku can handle more tasks"
+    },
+    "source": "economy.model_mix.opus.pct"
+  },
+  {
+    "key": "prs_per_hr",
+    "category": "Token Economy",
+    "label": "PRs/hr",
+    "unit": "count",
+    "definition": "Count of PR_OPENED events on the bus in the trailing 1-hour window.",
+    "so_what": "Pairs with cost_per_pr to reveal whether speed is cheap or expensive. Rising PRs with falling cost = efficiency gain.",
+    "goal": "Maximize prs_per_hr while cost_per_pr stays low",
+    "pair_with": "cost_per_pr",
+    "display": "kpi",
+    "source": "economy.prs_per_hr"
+  },
+  {
+    "key": "cost_per_pr",
+    "category": "Token Economy",
+    "label": "cost/PR",
+    "unit": "usd",
+    "definition": "Burn rate ($/hr) divided by PR throughput (PRs/hr). None when no PRs in the last hour.",
+    "so_what": "The unit economics of shipping code. Rising cost/PR signals rework, cold-cache, or runaway agents.",
+    "goal": "Minimize cost_per_pr; target < $5/PR",
+    "pair_with": "prs_per_hr",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "> 10",
+      "warn_msg": "High cost per PR — check for rework cycles or cold-cache sessions"
+    },
+    "source": "economy.cost_per_pr"
+  },
+  {
+    "key": "defects_caught_rate",
+    "category": "Quality",
+    "label": "defects caught %",
+    "unit": "ratio",
+    "definition": "CHALLENGE events confirmed by B3-rework in the same correlation-id thread / total CHALLENGE events.",
+    "so_what": "Measures review signal quality fleet-wide. Low rate means challenges are noise; high rate means reviewers are catching real issues.",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "< 0.5",
+      "good_if": "> 0.75",
+      "warn_msg": "Less than half of challenges confirmed — review specificity may be low"
+    },
+    "source": "quality.defects_caught_rate"
+  },
+  {
+    "key": "pm_ticket_clarity",
+    "category": "Paired Metrics",
+    "label": "PM ticket clarity",
+    "unit": "ratio",
+    "definition": "Accepted PM-dispatched tickets with no REOPEN / total accepted. Trailing 30-day window.",
+    "so_what": "Low clarity means PM is shipping ambiguous tickets — rework traces back to underspecified ACs.",
+    "goal": "pm_ticket_clarity > 0.85; rising clarity reduces fleet-wide rework",
+    "pair_with": "pm_optimization_yield",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.85",
+      "warn_msg": "Ticket clarity low — review AC specificity for recently reopened tickets"
+    },
+    "source": "compute.pm.ticket_clarity"
+  },
+  {
+    "key": "pm_optimization_yield",
+    "category": "Paired Metrics",
+    "label": "PM opt-yield",
+    "unit": "ratio",
+    "definition": "OPTIMIZATION proposals by PM accepted in-thread / total raised. None if < 5 proposals.",
+    "so_what": "Low yield means PM proposals are not surviving TL/ORCH scrutiny — noise or missing context.",
+    "goal": "Maximize optimization_yield; target > 0.6 of proposals adopted",
+    "pair_with": "pm_ticket_clarity",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.3",
+      "good_if": "> 0.6",
+      "warn_msg": "Optimization proposals not landing — PM insight cycle needs calibration"
+    },
+    "source": "compute.pm.optimization_yield"
+  },
+  {
+    "key": "tl_review_catch",
+    "category": "Paired Metrics",
+    "label": "TL review catch",
+    "unit": "ratio",
+    "definition": "TL CHALLENGE events confirmed by B3-rework / (confirmed + defects escaped past TL ACCEPT).",
+    "so_what": "Catch rate reveals how much of the quality wall TL review actually holds. Escaped defects caught later cost far more.",
+    "goal": "tl_review_catch > 0.8; defects caught early cost less than QA or prod escapes",
+    "pair_with": "tl_design_durability",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.6",
+      "good_if": "> 0.8",
+      "warn_msg": "TL review catch low — defects leaking past architecture review"
+    },
+    "source": "compute.tl.review_catch"
+  },
+  {
+    "key": "tl_design_durability",
+    "category": "Paired Metrics",
+    "label": "TL design durability",
+    "unit": "ratio",
+    "definition": "TL-dispatched tickets landing ACCEPT without REOPEN / total TL-dispatched tickets.",
+    "so_what": "Low durability means TL specs are under-specified; engineers rework against a moving spec.",
+    "goal": "Maximize design_durability; target > 0.8 clean first-land",
+    "pair_with": "tl_review_catch",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.65",
+      "good_if": "> 0.8",
+      "warn_msg": "TL designs needing rework — spec quality or scope may be drifting"
+    },
+    "source": "compute.tl.design_durability"
+  },
+  {
+    "key": "coder_first_pass_rate",
+    "category": "Paired Metrics",
+    "label": "coder first-pass",
+    "unit": "ratio",
+    "definition": "PR_OPENED threads reaching APPROVE without B3-rework / total PR_OPENED threads. Per be/fe role.",
+    "so_what": "First-pass directly determines cycle time. Each rework cycle costs another full review-queue position.",
+    "goal": "first_pass > 0.8; quality-adjusted throughput only reported when this floor is met",
+    "pair_with": "coder_quality_adjusted_throughput",
+    "display": "list",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.85",
+      "warn_msg": "First-pass rate low — PRs being returned; check AC clarity at ticket level"
+    },
+    "source": "compute.coder.first_pass"
+  },
+  {
+    "key": "coder_quality_adjusted_throughput",
+    "category": "Paired Metrics",
+    "label": "coder QA-throughput",
+    "unit": "count",
+    "definition": "Daily PRs per role — only reported if first_pass >= 0.70. null when quality floor not met.",
+    "so_what": "Protects against gaming: throughput without quality is not a valid signal.",
+    "goal": "Maximize daily PRs while first_pass >= 0.80; throughput masked if quality floor breaks",
+    "pair_with": "coder_first_pass_rate",
+    "display": "list",
+    "source": "compute.coder.quality_adjusted_throughput"
+  },
+  {
+    "key": "qa_escape_rate",
+    "category": "Paired Metrics",
+    "label": "QA escape rate",
+    "unit": "ratio",
+    "definition": "QA ACCEPT events followed by a REOPEN in-thread / total QA ACCEPT events. Lower is better.",
+    "so_what": "Escapes that reach ORCH or prod are the most expensive defects. Rising escape rate signals QA coverage gaps.",
+    "goal": "Minimize qa_escape_rate; target < 0.1",
+    "pair_with": "qa_edge_cases_per_ticket",
+    "display": "gauge",
+    "insight": {
+      "warn_if": "> 0.2",
+      "good_if": "< 0.05",
+      "warn_msg": "QA escape rate elevated — defects slipping past QA review"
+    },
+    "source": "compute.qa.escape_rate"
+  },
+  {
+    "key": "qa_edge_cases_per_ticket",
+    "category": "Paired Metrics",
+    "label": "QA edge cases/ticket",
+    "unit": "count",
+    "definition": "QA CHALLENGE events / threads QA reviewed. Higher = more thorough — never penalise high values.",
+    "so_what": "Many passes = thoroughness. Low edge-case coverage means QA is accepting too quickly.",
+    "goal": "Maximize edge_cases_per_ticket; target > 2 per ticket on average",
+    "pair_with": "qa_escape_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 1",
+      "good_if": "> 2",
+      "warn_msg": "QA edge-case coverage low — increase verification depth per ticket"
+    },
+    "source": "compute.qa.edge_cases_per_ticket"
+  },
+  {
+    "key": "sec_finding_precision",
+    "category": "Paired Metrics",
+    "label": "SEC precision",
+    "unit": "ratio",
+    "definition": "SEC CHALLENGE events confirmed by B3-rework in-thread / total SEC CHALLENGE events.",
+    "so_what": "Low precision means SEC review generates noise engineers must triage. High precision = signal, not noise.",
+    "goal": "Maximize finding_precision; target > 0.7 confirmed",
+    "pair_with": "sec_remediations_verified",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.4",
+      "good_if": "> 0.7",
+      "warn_msg": "SEC findings frequently unconfirmed — review specificity or false-positive rate may be high"
+    },
+    "source": "compute.sec.finding_precision"
+  },
+  {
+    "key": "sec_remediations_verified",
+    "category": "Paired Metrics",
+    "label": "SEC remediations",
+    "unit": "ratio",
+    "definition": "SEC findings where B3-rework was followed by ACCEPT in-thread / total SEC findings.",
+    "so_what": "Finding a vulnerability never fully verified as fixed is incomplete. Closure matters as much as discovery.",
+    "goal": "Maximize remediations_verified; target > 0.9 of findings fully closed",
+    "pair_with": "sec_finding_precision",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.7",
+      "good_if": "> 0.9",
+      "warn_msg": "Security findings not fully verified as remediated — closure loop incomplete"
+    },
+    "source": "compute.sec.remediations_verified"
+  },
+  {
+    "key": "plat_pipeline_green_rate",
+    "category": "Paired Metrics",
+    "label": "PLAT pipeline green",
+    "unit": "ratio",
+    "definition": "Pipeline CI runs completing successfully / total runs. None if pipeline events not yet on bus.",
+    "so_what": "Flaky pipelines block every engineer simultaneously. Pipeline green rate multiplies fleet throughput.",
+    "goal": "Maximize pipeline_green_rate; target > 0.95",
+    "pair_with": "plat_gate_catch_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.9",
+      "good_if": "> 0.95",
+      "warn_msg": "Pipeline reliability below 90% — fleet-wide throughput multiplier is degraded"
+    },
+    "source": "compute.plat.pipeline_green"
+  },
+  {
+    "key": "plat_gate_catch_rate",
+    "category": "Paired Metrics",
+    "label": "PLAT gate precision",
+    "unit": "ratio",
+    "definition": "Gate BLOCK events confirmed as real / total BLOCK events. None if < 5 BLOCK events.",
+    "so_what": "Gates that false-block train engineers to override them. High catch rate = trusted gates.",
+    "goal": "gate_catch_rate > 0.8; false-block rate < 0.2",
+    "pair_with": "plat_pipeline_green_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.6",
+      "good_if": "> 0.8",
+      "warn_msg": "Gate false-block rate high — engineers may be learning to bypass gates"
+    },
+    "source": "compute.plat.gate_catch_rate"
+  },
+  {
+    "key": "orch_clean_deploy_rate",
+    "category": "Paired Metrics",
+    "label": "ORCH clean deploys",
+    "unit": "ratio",
+    "definition": "ORCH DEPLOYED events without ROLLBACK / total ORCH deploys. None while ROLLBACK uninstrumented.",
+    "so_what": "Rollbacks are the most expensive fleet event — they interrupt all agents and erase in-flight work.",
+    "goal": "Maximize clean_deploy_rate; target > 0.95; zero rollbacks is the ambition",
+    "pair_with": "plat_pipeline_green_rate",
+    "display": "kpi",
+    "insight": {
+      "warn_if": "< 0.9",
+      "good_if": "> 0.95",
+      "warn_msg": "Deploy rollback rate elevated — review PLAT pipeline gates before next deploy"
+    },
+    "source": "compute.orch.clean_deploy_rate"
   }
 ]

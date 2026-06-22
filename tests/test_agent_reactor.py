@@ -28,10 +28,12 @@ def test_claude_cmd_is_headless_continue_with_role():
 def test_react_loop_drives_once_per_wake(wake_dir):
     calls = []
     # pre-seed one wake; loop a few iterations with no sleep
+    # store_path=None bypasses AGENTCTL_STORE env var so actionability is always True
     wake.write_wake(wake_dir, "be", "e1")
     drives = agent_reactor.react_loop(
         "be", wake_dir, poll=0,
-        runner=lambda cmd, compacted=False: calls.append(cmd), max_iters=3)
+        runner=lambda cmd, compacted=False: calls.append(cmd), max_iters=3,
+        store_path=None)
     assert drives == 1
     assert calls and calls[0][0] == "claude"
 

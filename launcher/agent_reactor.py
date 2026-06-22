@@ -118,6 +118,7 @@ def _log_code_touch(role: str, repo: str, sig0, ledger) -> None:
     except OSError:
         pass
 
+
 WAKE_PROMPT = (
     'You have new inbox message(s). Run '
     '`agentctl --store "$AGENTCTL_STORE" --wake-dir "$AGENTCTL_WAKE" inbox '
@@ -387,17 +388,22 @@ def heartbeat_path(wake_dir, role: str) -> Path:
     return Path(wake_dir).parent / "heartbeats" / f"{role}.hb"
 
 
+_UNSET = object()
+
+
 def react_loop(role: str, wake_dir, poll: float = 2.0, runner=None,
-               max_iters: int | None = None) -> int:
+               max_iters: int | None = None, store_path=_UNSET) -> int:
     """Watch for wakes and drive the role on each. Returns the number of drives.
 
     `runner` defaults to subprocess.run; `max_iters` bounds the loop for tests
     (None = run forever). Emits a liveness heartbeat every iteration (even while
-    idle) so observers can distinguish 'reactor alive' from 'bus alive'."""
+    idle) so observers can distinguish 'reactor alive' from 'bus alive'.
+    `store_path` defaults to AGENTCTL_STORE env var; pass None to skip inbox checks."""
     status_dir = Path(wake_dir).parent / "heartbeats"
     token_log = Path(wake_dir).parent / "token_usage.jsonl"
     briefs_dir = Path(wake_dir).parent / "briefs"  # Librarian drops carry-forwards here
-    store_path = os.environ.get("AGENTCTL_STORE")
+    if store_path is _UNSET:
+        store_path = os.environ.get("AGENTCTL_STORE")
     status_dir.mkdir(parents=True, exist_ok=True)
     if runner is None:
         runner = make_runner(role, token_log, status_dir)

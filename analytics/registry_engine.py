@@ -137,16 +137,18 @@ def _load_bus_rows(store_path) -> list[dict]:
     try:
         rows = []
         for r in con.execute(
-                "SELECT type, from_role, to_role, event, payload, "
+                "SELECT id, type, from_role, to_role, event, payload, "
                 "correlation_id, created_at, read_at FROM envelopes"):
             try:
                 payload = json.loads(r["payload"] or "{}")
             except json.JSONDecodeError:
                 payload = {}
-            rows.append({"type": r["type"], "from_role": r["from_role"],
-                         "to_role": r["to_role"], "event": r["event"],
-                         "payload": payload, "correlation_id": r["correlation_id"],
-                         "created_at": r["created_at"], "read_at": r["read_at"]})
+            rows.append({"id": r["id"], "type": r["type"],
+                         "from_role": r["from_role"], "to_role": r["to_role"],
+                         "event": r["event"], "payload": payload,
+                         "correlation_id": r["correlation_id"],
+                         "created_at": r["created_at"] or "",
+                         "read_at": r["read_at"]})
         return rows
     finally:
         con.close()
@@ -166,9 +168,15 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
 
     econ = economy.economy(recs)
     econ["cache_hit_series"] = economy.cache_hit_series(recs)
+    econ["prs_per_hr"] = economy.prs_per_hr(rows)
+    econ["cost_per_pr"] = economy.cost_per_pr(rows, recs)
     flw = flow.flow(rows)
     blt = bloat.bloat(commits)
     verdicts = _compute.verdicts_from_rows(rows)
+    threads = _compute._build_threads(rows)
+
+    quality = _compute.fleet_metrics(verdicts)
+    quality["defects_caught_rate"] = _compute.defects_caught_rate(threads)
 
     snap: dict = {
         "economy": econ,
@@ -176,8 +184,43 @@ def build_snapshot(token_log_path, store_path, repo_path=None,
         "bloat": blt,
         "ijw": ijw.ijw(econ, flw, blt, rows),
         "optimizer": {"open_count": _opt.open_count(repo_path)},
-        "quality": _compute.fleet_metrics(verdicts),
+        "quality": quality,
         "librarian": None,
+        "compute": {
+            "pm": {
+                "ticket_clarity": _compute.pm_ticket_clarity(threads),
+                "optimization_yield": _compute.pm_optimization_yield(threads),
+            },
+            "tl": {
+                "review_catch": _compute.tl_review_catch(threads),
+                "design_durability": _compute.tl_design_durability(threads),
+            },
+            "coder": {
+                "first_pass": {
+                    "be": _compute.coder_first_pass(threads, "be"),
+                    "fe": _compute.coder_first_pass(threads, "fe"),
+                },
+                "quality_adjusted_throughput": {
+                    "be": _compute.coder_quality_adjusted_throughput(threads, "be"),
+                    "fe": _compute.coder_quality_adjusted_throughput(threads, "fe"),
+                },
+            },
+            "qa": {
+                "escape_rate": _compute.qa_escape_rate(threads),
+                "edge_cases_per_ticket": _compute.qa_edge_cases_per_ticket(threads),
+            },
+            "sec": {
+                "finding_precision": _compute.sec_finding_precision(threads),
+                "remediations_verified": _compute.sec_remediations_verified(threads),
+            },
+            "plat": {
+                "pipeline_green": _compute.plat_pipeline_green(rows),
+                "gate_catch_rate": _compute.plat_gate_catch_rate(rows),
+            },
+            "orch": {
+                "clean_deploy_rate": _compute.orch_clean_deploy_rate(rows),
+            },
+        },
     }
 
     if cabinet_path is not None:

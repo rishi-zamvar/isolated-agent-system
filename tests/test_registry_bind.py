@@ -233,8 +233,8 @@ def test_serve_registry_all_26_sources_resolve(tmp_path):
 
     assert "generated_at" in resp
     metrics = resp["metrics"]
-    # PM added 6 librarian.relevance_efficiency.* + librarian.recall_stats.by_role entries
-    assert len(metrics) == 32
+    # 32 original + 17 stat-pairs entries (WS3 tkt-stat-pairs-be-v1)
+    assert len(metrics) == 49
 
     by_source = {m["source"]: m for m in metrics}
 

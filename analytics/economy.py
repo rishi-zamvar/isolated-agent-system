@@ -176,3 +176,38 @@ def economy(recs: list[dict]) -> dict:
         "waste": waste(recs),
         "runaway": runaway_runs(recs),
     }
+
+
+def _epoch(ts: str) -> float:
+    """Parse ISO-8601 created_at string to epoch float. O(1)."""
+    import datetime as _dt
+    try:
+        return _dt.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
+
+
+def prs_per_hr(rows: list[dict], _now: float | None = None) -> float:
+    """Count PR_OPENED bus events in trailing 1-hour window.
+
+    Proxy for merged-PR throughput. Returns 0.0 if none in window.
+    O(n) over rows.
+    """
+    import datetime as _dt
+    now = _now or _dt.datetime.now(_dt.timezone.utc).timestamp()
+    cutoff = now - 3600
+    return float(sum(1 for r in rows
+                     if r.get("type") == "PR" and r.get("event") == "PR_OPENED"
+                     and _epoch(r.get("created_at", "")) >= cutoff))
+
+
+def cost_per_pr(rows: list[dict], recs: list[dict],
+                _now: float | None = None) -> float | None:
+    """burn_usd_per_hr / prs_per_hr. None when prs_per_hr == 0 (avoid div-by-zero).
+
+    O(n) over rows and recs.
+    """
+    rate = prs_per_hr(rows, _now)
+    if not rate:
+        return None
+    return round(burn_rate(recs)["usd_per_hr"] / rate, 4)
