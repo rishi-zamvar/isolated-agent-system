@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from profiles.model_presets import DEFAULT_PRESET, model_for
-from profiles.roles import ROLES, RoleSpec
+from profiles.roles import KIND, ROLES, RoleSpec
 
 _SHARED = Path(__file__).parent / "_shared"
 
@@ -29,7 +29,16 @@ def _norms() -> str:
 
 def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
     head = _block("orch_block.md") if not spec.is_worker else _block("worker_block.md")
+    # base agent, specialized by KIND: planners decide (output = bus artifact), implementers
+    # build (output = code). The edit-ratio distribution emerges from this loop shape.
+    kind_block = ""
+    if spec.is_worker:
+        kb = "planner_block.md" if KIND.get(role_id) == "planner" else "implementer_block.md"
+        kind_block = "\n\n" + _block(kb)
     shim = _block("shim_block.md")
+    # Every worker shares the testing doctrine (comprehensive coverage + edge-case banking
+    # + visual/device gates). orch ratifies, doesn't write tests, so it's omitted there.
+    testing = ("\n\n" + _block("testing_block.md")) if spec.is_worker else ""
     fns = "\n".join(f"- `fn {f}`" for f in spec.functions)
     dens = "\n".join(f"- {d}" for d in spec.denials)
     sup = spec.supervisor or "the human"
@@ -38,9 +47,9 @@ def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
 
 **Agent id:** `{role_id}`  ·  **Supervisor:** {sup}
 
-{head}
+{head}{kind_block}
 
-{shim}
+{shim}{testing}
 
 {norms}
 
