@@ -22,9 +22,44 @@ class RoleSpec:
     model: str = "claude-opus-4-8"  # v1.1 go-live: Opus (was sonnet for MVP)
 
 
+# Production protection — the hard guardrail every worker carries (enforced even in bypass
+# mode): NO worker pushes to main or deploys directly. Those happen ONLY via ORCH's
+# GoDecision gate (ORCH lands deploys after the review chain). Applied to all workers below.
+_PROD_DENY = ["Bash(git push:* main)", "Bash(git push origin main:*)",
+              "Bash(git push:*main*)", "Bash(*deploy*)", "Bash(kubectl apply:*)"]
+
+
 # Worker autonomy: no per-command prompts inside the lane; deny list is the hard guardrail.
 def _worker_perms(deny: list[str]) -> dict:
-    return {"defaultMode": "bypassPermissions", "deny": deny}
+    return {"defaultMode": "bypassPermissions", "deny": _PROD_DENY + deny}
+
+
+# Target share of an agent's tool-runs that should be CODE EDITS — the "stay in your lane"
+# bar. Thinking flows UP, implementation flows DOWN: the engineers do ~all the coding; PM/TL
+# think and delegate. Everyone keeps full edit access — this is behavioural discipline + a
+# dashboard signal, NOT a permission block (agents edit where THEY identify a change).
+EDIT_TARGET: dict[str, float] = {
+    "orch": 0.00,   # never edits — decisions + audit only
+    "pm":   0.10,   # think + delegate; touch code only for a change you specifically identify
+    "tl":   0.10,   # architecture + review; rarely edits
+    "be":   0.90,   # implementer — almost every run ships code
+    "fe":   0.90,   # implementer — almost every run ships code
+    "plat": 0.50,   # CI/infra: half editing, half operating
+    "qa":   0.50,   # tests/gates: half editing, half verifying
+    "sec":  0.50,   # audits + fixes: half editing, half analysis
+}
+
+
+# Two agent KINDS, specialized from the base worker. A PLANNER decides (its unit of work is
+# a bus artifact — Ticket / AcceptanceCriteria / ADR / ReviewVerdict / ruling; a code change
+# is a Ticket it ROUTES to an engineer). An IMPLEMENTER builds (its unit of work is code; its
+# surface is the repo). The edit-ratio distribution (~90 implementers / ~50 mixed / ~5-10
+# planners, per EDIT_TARGET) EMERGES from the loop shape — it is never mandated as a number.
+KIND: dict[str, str] = {
+    "orch": "planner", "pm": "planner", "tl": "planner",
+    "be": "implementer", "fe": "implementer", "plat": "implementer",
+    "qa": "implementer", "sec": "implementer",
+}
 
 
 ROLES: dict[str, RoleSpec] = {
@@ -44,26 +79,42 @@ ROLES: dict[str, RoleSpec] = {
         denials=["write code", "run build tools"],
         supervisor=None,
         is_worker=False,
-        # ORCH decides + audits: read + git/dispatch inspection allowed; code editing denied.
-        perms={"defaultMode": "default",
-               "allow": ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(git show:*)",
-                         "Bash(git diff:*)", "Bash(agentctl:*)", "Bash(dispatchctl:*)"],
-               "deny": ["Edit", "Write", "NotebookEdit"]},
+        # ORCH decides + audits + operates the bus, but writes NO code and mutates NO prod.
+        # bypassPermissions (like the workers) so it can run the agentctl/py bus CLI unattended
+        # — the apex-skeptic boundary is the deny list (no Edit/Write/NotebookEdit), not an
+        # approval prompt. defaultMode=default silently blocked orch from reading its own inbox
+        # (it invokes `py -m agentctl.cli`, which the allowlist didn't cover) — caught 2026-06-24
+        # the first time orch actually ran. See project_isolated_agent_fleet_auth memory.
+        perms={"defaultMode": "bypassPermissions",
+               "deny": _PROD_DENY + ["Edit", "Write", "NotebookEdit"]},
     ),
     "pm": RoleSpec(
         title="PM — Product Manager (the what and the when)",
         mandate=("Translate the Context Doc into prioritized, testable tickets and "
                  "decide whether the delivered thing matches what was asked. No code, "
-                 "no architecture."),
+                 "no architecture. AND: continuously mine the live system metrics for "
+                 "root-cause inefficiencies — surface the problem BEHIND the symptom and "
+                 "the direction to fix it as high-leverage optimization proposals, routing "
+                 "the architectural design to TL. The dashboard's warn signals are your "
+                 "backlog to investigate, not just numbers to report."),
         functions=[
             "decompose(ctx: ContextDoc) -> [Ticket] [to TL]  (post: each ticket independently shippable, traces to one Context Doc line)",
             "define_acceptance(t: Ticket) -> AcceptanceCriteria [to QA]  (post: every criterion is binary pass/fail)",
             "accept_delivery(feature, ac: AcceptanceCriteria, tr: TestReport [from QA]) -> accepted | reopened",
+            ("surface_optimizations(metrics [curl http://100.91.236.115:8802/api/registry + /api/pulse], "
+             "bus, token_usage.jsonl) -> [Ticket event=OPTIMIZATION] [to tl]  "
+             "(each insight cycle: pick the single highest-leverage ROOT-CAUSE inefficiency behind a "
+             "warn signal — the cause, NOT the symptom — and raise payload "
+             "{problem, root_cause, proposed_direction, expected_impact, effort}. Reason STRUCTURALLY: "
+             "e.g. high burn + 95% idle-run is largely COLD-START cost — each wake re-reads the transcript "
+             "at full price once the ~5-min prompt-cache TTL lapses — so propose PERSISTENT WARM SESSIONS / "
+             "cache-keepalive. You own the WHAT/WHY and the expected payoff; TL owns the HOW. One crisp "
+             "proposal per cycle beats ten shallow ones.)"),
         ],
         denials=["write code", "set architecture", "repo source write", "production access"],
         supervisor="orch",
         is_worker=True,
-        perms=_worker_perms(["Bash(git push:*)", "Bash(*deploy*)", "Edit(src/**)", "Write(src/**)"]),
+        perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
     ),
     "tl": RoleSpec(
         title="TL — Tech Lead / Engineering Manager (the how and the who)",
@@ -81,7 +132,7 @@ ROLES: dict[str, RoleSpec] = {
         supervisor="orch",
         is_worker=True,
         writes_code=True,
-        perms=_worker_perms(["Bash(*deploy*)", "Bash(kubectl apply:*)"]),
+        perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
     ),
     "be": RoleSpec(
         title="BE — Senior Backend Engineer (+ data / ML)",
@@ -146,7 +197,7 @@ ROLES: dict[str, RoleSpec] = {
         denials=["edit src", "bypass its own gates"],
         supervisor="tl",
         is_worker=True,
-        perms=_worker_perms(["Edit(src/**)", "Write(src/**)", "Bash(*deploy*)"]),
+        perms=_worker_perms([]),  # implementer: edits tests/code; prod-protected by base
     ),
     "sec": RoleSpec(
         title="SEC — Security & Compliance",
@@ -161,6 +212,6 @@ ROLES: dict[str, RoleSpec] = {
         supervisor="tl",
         is_worker=True,
         writes_code=True,
-        perms=_worker_perms(["Bash(icacls:*)", "Bash(chmod:*)", "Bash(*deploy*)"]),
+        perms=_worker_perms(["Bash(icacls:*)", "Bash(chmod:*)"]),
     ),
 }
