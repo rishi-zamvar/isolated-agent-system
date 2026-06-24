@@ -79,14 +79,16 @@ ROLES: dict[str, RoleSpec] = {
         denials=["write code", "run build tools"],
         supervisor=None,
         is_worker=False,
-        # ORCH decides + audits + operates the bus, but writes NO code and mutates NO prod.
-        # bypassPermissions (like the workers) so it can run the agentctl/py bus CLI unattended
-        # — the apex-skeptic boundary is the deny list (no Edit/Write/NotebookEdit), not an
-        # approval prompt. defaultMode=default silently blocked orch from reading its own inbox
-        # (it invokes `py -m agentctl.cli`, which the allowlist didn't cover) — caught 2026-06-24
-        # the first time orch actually ran. See project_isolated_agent_fleet_auth memory.
+        # ORCH decides + audits + operates the bus, but writes NO code. bypassPermissions (like
+        # the workers) so it can run the agentctl/py bus CLI unattended — the apex-skeptic
+        # boundary is the code-write deny, not an approval prompt. NOTE: deny is ONLY the
+        # code-write tools — NOT _PROD_DENY. ORCH's whole job is issuing GoDecisions that
+        # AUTHORIZE deploys; a `Bash(*deploy*)` deny matched orch's own `agentctl send ...
+        # GoDecision ... deploy` egress and silently gagged it (caught 2026-06-24: orch made a
+        # correct CONDITIONAL GO but couldn't transmit it). orch never EXECUTES deploys/pushes
+        # itself (plat does, gated on the GoDecision) — so it needs no prod-mutation bash deny.
         perms={"defaultMode": "bypassPermissions",
-               "deny": _PROD_DENY + ["Edit", "Write", "NotebookEdit"]},
+               "deny": ["Edit", "Write", "NotebookEdit"]},
     ),
     "pm": RoleSpec(
         title="PM — Product Manager (the what and the when)",
