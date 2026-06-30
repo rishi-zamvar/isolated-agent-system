@@ -47,6 +47,11 @@ def unread_ceo_messages(db_path) -> list[tuple[str, str]]:
         con.close()
 
 
+def _log(msg: str) -> None:
+    """Single-line stdout log (captured to bridge.out by the task wrapper)."""
+    print(f"[bridge] {msg}", flush=True)
+
+
 def _run(cmd, runner):
     return (runner or (lambda c: subprocess.run(c, check=False)))(cmd)
 
@@ -82,6 +87,9 @@ def react_once(*, db_path=None, store, wake_dir, inject=None, mark=None) -> int:
         if inject(mid, body) == 0:
             mark(mid)
             done += 1
+            _log(f"injected CEO msg {mid} -> orch (FreeText intake_intent)")
+        else:
+            _log(f"inject FAILED for CEO msg {mid}; left unread for retry")
     return done
 
 
@@ -103,6 +111,7 @@ def loop(wake_dir, *, poll: float = 2.0, react=None, store=None, wake_bus=None,
     if react is None:
         react = lambda: react_once(store=store, wake_dir=wake_bus)
     seen = {p.name for p in Path(wake_dir).glob("dispatch-wake-*.md")}
+    _log(f"watching {wake_dir} (poll={poll}s); draining backlog on start")
     reacts = 0
     if react_on_start:
         react(); reacts += 1
