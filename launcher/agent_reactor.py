@@ -18,6 +18,12 @@ import threading
 import time
 from pathlib import Path
 
+import sys as _sys
+try:
+    _sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    _sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
 from agentctl import heartbeat, store as _store
 from profiles.model_presets import model_for, model_for_wake, _NOISE_EVENTS
 
@@ -31,11 +37,11 @@ def _ws_sig(repo: str):
     git repo. Comparing before/after a run detects whether the agent changed code."""
     try:
         head = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
-                              capture_output=True, text=True, timeout=8)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8)
         if head.returncode != 0:
             return None
         porc = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
-                              capture_output=True, text=True, timeout=8)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8)
         return head.stdout.strip() + "\n" + porc.stdout
     except Exception:
         return None
@@ -195,7 +201,7 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
         sig0 = _ws_sig(_WORKREPO)
         stop = _start_keepalive(busy, hb)
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         finally:
             stop.set()
         sig1 = _ws_sig(_WORKREPO)
