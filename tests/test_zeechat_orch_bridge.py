@@ -24,10 +24,6 @@ def _make_db(path: Path, rows):
     con.close()
 
 
-def _touch(d, name):
-    (d / name).write_text("x", encoding="utf-8")
-
-
 def test_unread_ceo_messages_returns_only_unread_ceo_zeechat(tmp_path):
     db = tmp_path / "dispatch.db"
     _make_db(db, [
@@ -97,23 +93,16 @@ def test_react_once_does_not_mark_when_inject_fails(tmp_path):
     assert marked == []                      # left unread for retry
 
 
-def test_pending_detects_new_dispatch_touches(tmp_path):
-    seen = set()
-    _touch(tmp_path, "dispatch-wake-2026-06-30T11-00-00Z__high__aaa.md")
-    assert bridge.pending(tmp_path, seen) == [
-        "dispatch-wake-2026-06-30T11-00-00Z__high__aaa.md"]
-    assert bridge.pending(tmp_path, seen) == []
-    _touch(tmp_path, "dispatch-wake-2026-06-30T11-05-00Z__normal__bbb.md")
-    assert len(bridge.pending(tmp_path, seen)) == 1
-
-
-def test_loop_reacts_on_start_then_on_new_touch(tmp_path):
+def test_loop_polls_react_on_start_and_each_interval():
     reacts = []
+    n = bridge.loop(poll=0, react=lambda: reacts.append(True),
+                    max_iters=3, react_on_start=True)
+    assert n == 4              # startup drain + one react per poll interval
+    assert len(reacts) == 4
 
-    def react():
-        reacts.append(True)
-        if len(reacts) == 1:   # first (startup) react creates a brand-new touch
-            _touch(tmp_path, "dispatch-wake-2026-06-30T12-00-00Z__high__new.md")
 
-    n = bridge.loop(tmp_path, poll=0, react=react, max_iters=1, react_on_start=True)
-    assert n == 2              # startup react + reaction to the new touch
+def test_loop_skips_startup_drain_when_disabled():
+    reacts = []
+    n = bridge.loop(poll=0, react=lambda: reacts.append(True),
+                    max_iters=2, react_on_start=False)
+    assert n == 2              # no startup react; one per interval

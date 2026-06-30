@@ -93,39 +93,28 @@ def react_once(*, db_path=None, store, wake_dir, inject=None, mark=None) -> int:
     return done
 
 
-def pending(wake_dir, seen: set[str]) -> list[str]:
-    """New dispatch wake-touch filenames not yet handled."""
-    out = []
-    for p in sorted(Path(wake_dir).glob("dispatch-wake-*.md")):
-        if p.name not in seen:
-            seen.add(p.name)
-            out.append(p.name)
-    return out
-
-
-def loop(wake_dir, *, poll: float = 2.0, react=None, store=None, wake_bus=None,
+def loop(*, poll: float = 2.0, react=None, store=None, wake_bus=None,
          max_iters: int | None = None, react_on_start: bool = True) -> int:
-    """Watch the dispatch wake dir; run `react` on start (drain backlog) and on each
-    new touch. `react` defaults to react_once against the agentctl bus. Returns the
-    number of reactions (for tests)."""
+    """Poll the dispatch DB every `poll` seconds and drain any unread CEO messages
+    onto the agentctl bus. CEO ZeeChat (chat-path) messages do NOT produce dispatch
+    wake-touches, so we poll the DB directly rather than watch a wake dir. `react`
+    defaults to react_once; idempotent (marks handled), so re-polling is safe.
+    Returns the number of react calls (for tests)."""
     if react is None:
         react = lambda: react_once(store=store, wake_dir=wake_bus)
-    seen = {p.name for p in Path(wake_dir).glob("dispatch-wake-*.md")}
-    _log(f"watching {wake_dir} (poll={poll}s); draining backlog on start")
+    _log(f"polling dispatch DB every {poll}s for unread CEO messages")
     reacts = 0
     if react_on_start:
         react(); reacts += 1
     i = 0
     while max_iters is None or i < max_iters:
-        if pending(wake_dir, seen):
-            react(); reacts += 1
+        react(); reacts += 1
         time.sleep(poll)
         i += 1
     return reacts
 
 
 if __name__ == "__main__":
-    wake = sys.argv[1] if len(sys.argv) > 1 else str(Path.home() / ".dispatch" / "wake-touches")
     store = os.environ["AGENTCTL_STORE"]
     wake_bus = os.environ["AGENTCTL_WAKE"]
-    loop(wake, store=store, wake_bus=wake_bus)
+    loop(store=store, wake_bus=wake_bus)
