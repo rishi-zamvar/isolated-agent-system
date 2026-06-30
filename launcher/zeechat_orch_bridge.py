@@ -11,6 +11,7 @@ DB access for discovery; daemon-owned `dispatchctl read` for marking.
 
 import json
 import os
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -19,6 +20,17 @@ from pathlib import Path
 
 DISPATCH_DB = Path(os.environ.get("DISPATCH_DB",
                                   str(Path.home() / ".dispatch" / "dispatch.db")))
+
+# Interpreter used to run `-m agentctl.cli`. Default to the bridge's own
+# interpreter so it works wherever the bridge runs (Windows has no reliable
+# `python3` on PATH — bare `python3` hits a Microsoft Store shim). Override
+# with BRIDGE_PYTHON.
+PYTHON = os.environ.get("BRIDGE_PYTHON", sys.executable)
+
+# Command prefix to reach the dispatch CLI (owns the dispatch DB; used to mark a
+# message handled). On the Mac `dispatchctl` is on PATH; on the PC it is not, so
+# set DISPATCHCTL_CMD="py C:/ZeeCloud/Projects/dispatch/dispatch-cli/dispatchctl.py".
+DISPATCHCTL = shlex.split(os.environ.get("DISPATCHCTL_CMD", "dispatchctl"))
 
 
 def unread_ceo_messages(db_path) -> list[tuple[str, str]]:
@@ -44,7 +56,7 @@ def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
     runner result (rc==0 on success). FreeText is consumed by orch, so it validates."""
     payload = json.dumps({"source": "zeechat", "origin": "ceo",
                           "msg_id": msg_id, "text": text})
-    cmd = ["python3", "-m", "agentctl.cli", "--store", str(store),
+    cmd = [PYTHON, "-m", "agentctl.cli", "--store", str(store),
            "--wake-dir", str(wake_dir), "send",
            "--from", "orch", "--to", "orch",
            "--type", "FreeText", "--event", "intake_intent",
@@ -54,7 +66,7 @@ def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
 
 def mark_handled(msg_id: str, *, runner=None):
     """Mark a CEO message handled via the daemon (owns the dispatch DB)."""
-    return _run(["dispatchctl", "read", msg_id], runner)
+    return _run([*DISPATCHCTL, "read", msg_id], runner)
 
 
 def react_once(*, db_path=None, store, wake_dir, inject=None, mark=None) -> int:

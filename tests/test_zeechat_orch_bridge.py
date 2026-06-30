@@ -47,7 +47,8 @@ def test_inject_to_orch_builds_freetext_envelope_to_orch():
         store="/s/agentctl.db", wake_dir="/s/wake",
         runner=lambda cmd: calls.append(cmd) or _Ok())
     cmd = calls[0]
-    assert cmd[:3] == ["python3", "-m", "agentctl.cli"]
+    assert cmd[0] == bridge.PYTHON          # configurable interpreter (cross-platform)
+    assert cmd[1:3] == ["-m", "agentctl.cli"]
     assert "--store" in cmd and "/s/agentctl.db" in cmd
     assert "--wake-dir" in cmd and "/s/wake" in cmd
     assert "send" in cmd
@@ -63,7 +64,7 @@ def test_inject_to_orch_builds_freetext_envelope_to_orch():
 def test_mark_handled_calls_dispatchctl_read():
     calls = []
     bridge.mark_handled("a", runner=lambda cmd: calls.append(cmd) or _Ok())
-    assert calls[0] == ["dispatchctl", "read", "a"]
+    assert calls[0] == [*bridge.DISPATCHCTL, "read", "a"]
 
 
 def test_react_once_injects_and_marks_each_unread(tmp_path):
