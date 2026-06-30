@@ -55,3 +55,19 @@ def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
 def mark_handled(msg_id: str, *, runner=None):
     """Mark a CEO message handled via the daemon (owns the dispatch DB)."""
     return _run(["dispatchctl", "read", msg_id], runner)
+
+
+def react_once(*, db_path=None, store, wake_dir, inject=None, mark=None) -> int:
+    """Process all unread CEO messages once. Marks a message handled ONLY after a
+    successful inject (rc==0), so a failed inject leaves it unread for retry.
+    Returns the count successfully injected. `inject`/`mark` are injectable for tests."""
+    db_path = db_path or DISPATCH_DB
+    inject = inject or (lambda mid, txt: getattr(
+        inject_to_orch(mid, txt, store=store, wake_dir=wake_dir), "returncode", 1))
+    mark = mark or (lambda mid: mark_handled(mid))
+    done = 0
+    for mid, body in unread_ceo_messages(db_path):
+        if inject(mid, body) == 0:
+            mark(mid)
+            done += 1
+    return done

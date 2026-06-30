@@ -64,3 +64,33 @@ def test_mark_handled_calls_dispatchctl_read():
     calls = []
     bridge.mark_handled("a", runner=lambda cmd: calls.append(cmd) or _Ok())
     assert calls[0] == ["dispatchctl", "read", "a"]
+
+
+def test_react_once_injects_and_marks_each_unread(tmp_path):
+    db = tmp_path / "dispatch.db"
+    _make_db(db, [
+        ("a", "ceo", "pm", "in", "ZeeChat: one", "first", None, "2026-06-30T10:00:00"),
+        ("b", "ceo", "pm", "in", "ZeeChat: two", "second", None, "2026-06-30T10:05:00"),
+    ])
+    injected, marked = [], []
+    n = bridge.react_once(
+        db_path=db, store="/s/db", wake_dir="/s/wake",
+        inject=lambda mid, txt: injected.append((mid, txt)) or 0,
+        mark=lambda mid: marked.append(mid))
+    assert n == 2
+    assert injected == [("a", "first"), ("b", "second")]
+    assert marked == ["a", "b"]
+
+
+def test_react_once_does_not_mark_when_inject_fails(tmp_path):
+    db = tmp_path / "dispatch.db"
+    _make_db(db, [
+        ("a", "ceo", "pm", "in", "ZeeChat: one", "first", None, "2026-06-30T10:00:00"),
+    ])
+    marked = []
+    n = bridge.react_once(
+        db_path=db, store="/s/db", wake_dir="/s/wake",
+        inject=lambda mid, txt: 2,          # nonzero rc == failure
+        mark=lambda mid: marked.append(mid))
+    assert n == 0
+    assert marked == []                      # left unread for retry
