@@ -33,3 +33,20 @@ def unread_ceo_messages(db_path) -> list[tuple[str, str]]:
         return [(r[0], r[1]) for r in cur.fetchall()]
     finally:
         con.close()
+
+
+def _run(cmd, runner):
+    return (runner or (lambda c: subprocess.run(c, check=False)))(cmd)
+
+
+def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
+    """Inject a CEO message onto the agentctl bus as FreeText->orch. Returns the
+    runner result (rc==0 on success). FreeText is consumed by orch, so it validates."""
+    payload = json.dumps({"source": "zeechat", "origin": "ceo",
+                          "msg_id": msg_id, "text": text})
+    cmd = ["python3", "-m", "agentctl.cli", "--store", str(store),
+           "--wake-dir", str(wake_dir), "send",
+           "--from", "orch", "--to", "orch",
+           "--type", "FreeText", "--event", "intake_intent",
+           "--payload", payload]
+    return _run(cmd, runner)

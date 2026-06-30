@@ -38,3 +38,23 @@ def test_unread_ceo_messages_returns_only_unread_ceo_zeechat(tmp_path):
     ])
     out = bridge.unread_ceo_messages(db)
     assert out == [("a", "build X please")]
+
+
+def test_inject_to_orch_builds_freetext_envelope_to_orch():
+    calls = []
+    bridge.inject_to_orch(
+        "a", "build X please",
+        store="/s/agentctl.db", wake_dir="/s/wake",
+        runner=lambda cmd: calls.append(cmd) or _Ok())
+    cmd = calls[0]
+    assert cmd[:3] == ["python3", "-m", "agentctl.cli"]
+    assert "--store" in cmd and "/s/agentctl.db" in cmd
+    assert "--wake-dir" in cmd and "/s/wake" in cmd
+    assert "send" in cmd
+    assert cmd[cmd.index("--from") + 1] == "orch"
+    assert cmd[cmd.index("--to") + 1] == "orch"
+    assert cmd[cmd.index("--type") + 1] == "FreeText"
+    assert cmd[cmd.index("--event") + 1] == "intake_intent"
+    payload = json.loads(cmd[cmd.index("--payload") + 1])
+    assert payload == {"source": "zeechat", "origin": "ceo",
+                       "msg_id": "a", "text": "build X please"}
