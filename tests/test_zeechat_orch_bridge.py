@@ -58,3 +58,9 @@ def test_inject_to_orch_builds_freetext_envelope_to_orch():
     payload = json.loads(cmd[cmd.index("--payload") + 1])
     assert payload == {"source": "zeechat", "origin": "ceo",
                        "msg_id": "a", "text": "build X please"}
+
+
+def test_mark_handled_calls_dispatchctl_read():
+    calls = []
+    bridge.mark_handled("a", runner=lambda cmd: calls.append(cmd) or _Ok())
+    assert calls[0] == ["dispatchctl", "read", "a"]

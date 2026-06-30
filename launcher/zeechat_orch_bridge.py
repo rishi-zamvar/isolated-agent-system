@@ -50,3 +50,8 @@ def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
            "--type", "FreeText", "--event", "intake_intent",
            "--payload", payload]
     return _run(cmd, runner)
+
+
+def mark_handled(msg_id: str, *, runner=None):
+    """Mark a CEO message handled via the daemon (owns the dispatch DB)."""
+    return _run(["dispatchctl", "read", msg_id], runner)
