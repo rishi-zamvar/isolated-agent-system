@@ -39,13 +39,11 @@ def _worker_perms(deny: list[str]) -> dict:
 # think and delegate. Everyone keeps full edit access — this is behavioural discipline + a
 # dashboard signal, NOT a permission block (agents edit where THEY identify a change).
 EDIT_TARGET: dict[str, float] = {
-    "orch": 0.00,   # never edits — decisions + audit only
-    "pm":   0.10,   # think + delegate; touch code only for a change you specifically identify
-    "tl":   0.10,   # architecture + review; rarely edits
+    "orch": 0.00,   # LEAD — never edits; intake + tickets + routing + audit only
+    "tl":   0.05,   # ARCHITECT — design + single-pass review; must NOT hand-implement
     "be":   0.90,   # implementer — almost every run ships code
     "fe":   0.90,   # implementer — almost every run ships code
     "plat": 0.50,   # CI/infra: half editing, half operating
-    "qa":   0.50,   # tests/gates: half editing, half verifying
     "sec":  0.50,   # audits + fixes: half editing, half analysis
 }
 
@@ -56,79 +54,64 @@ EDIT_TARGET: dict[str, float] = {
 # surface is the repo). The edit-ratio distribution (~90 implementers / ~50 mixed / ~5-10
 # planners, per EDIT_TARGET) EMERGES from the loop shape — it is never mandated as a number.
 KIND: dict[str, str] = {
-    "orch": "planner", "pm": "planner", "tl": "planner",
+    "orch": "planner", "tl": "planner",
     "be": "implementer", "fe": "implementer", "plat": "implementer",
-    "qa": "implementer", "sec": "implementer",
+    "sec": "implementer",
 }
 
 
 ROLES: dict[str, RoleSpec] = {
     "orch": RoleSpec(
-        title="ORCH — the head (final say)",
-        mandate=("The sole human interface and ultimate arbiter. Build context "
-                 "from the human's prompt, ratify irreversible actions, rule on "
-                 "escalated challenges, report back. Interrogation, decisioning, "
-                 "and audit only — never code, never build tools."),
+        title="LEAD — the head (human interface, tickets, final say)",
+        mandate=("The sole human interface and ultimate arbiter. Build context from "
+                 "the human's prompt, decompose it into testable tickets, ROUTE every "
+                 "unit of build work DOWN to an implementer (be/fe/plat) — never let the "
+                 "verify tier (tl/sec) implement it — ratify irreversible actions, accept "
+                 "or reopen delivery, rule on escalations, report back. Also mine the live "
+                 "metrics for root-cause inefficiencies and raise them as optimization "
+                 "tickets. Decisioning, routing, and audit only — never code, never build tools."),
         functions=[
             "intake_intent(prompt: FreeText [from human]) -> ClarifiedIntent  (loop: interrogate until no material ambiguity)",
             "build_context(intent: ClarifiedIntent) -> ContextDoc [to repo + all]  (post: a versioned Context Doc is committed)",
-            "approve_gate(req: ApprovalRequest, chain: [Verdict]) -> GoDecision | bounce  (pre: chain complete, sha-consistent, no open challenge, invariants hold)",
+            "decompose(ctx: ContextDoc) -> [Ticket] [to implementers]  (each ticket independently shippable, assigned to be/fe/plat — NOT to tl/sec)",
+            "define_acceptance(t: Ticket) -> AcceptanceCriteria  (every criterion binary pass/fail)",
+            "accept_delivery(feature, ac, gate: GateResult) -> accepted | reopened  (trust the deterministic gate; do not re-run its checks)",
+            "approve_gate(req: ApprovalRequest, chain: [Verdict]) -> GoDecision | bounce  (pre: gate GREEN, sha-consistent, no open challenge, invariants hold)",
+            "surface_optimizations(metrics, bus, token_usage) -> [Ticket event=OPTIMIZATION] [to implementers]  (one crisp root-cause proposal per cycle)",
             "rule_escalation(thread: ChallengeThread) -> Ruling  (binding, logged)",
             "report(state) -> Notification [to human]  (gated decisions, escalations, daily digest)",
         ],
-        denials=["write code", "run build tools"],
+        denials=["write code", "run build tools", "implement a ticket instead of routing it"],
         supervisor=None,
         is_worker=False,
-        # ORCH decides + audits: read + git/dispatch inspection allowed; code editing denied.
-        perms={"defaultMode": "default",
-               "allow": ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(git show:*)",
-                         "Bash(git diff:*)", "Bash(agentctl:*)", "Bash(dispatchctl:*)"],
+        # ORCH decides + audits + operates the bus, but writes NO code. bypassPermissions (like
+        # the workers) so it can run the agentctl/py bus CLI unattended — the apex-skeptic
+        # boundary is the code-write deny, not an approval prompt. NOTE: deny is ONLY the
+        # code-write tools — NOT _PROD_DENY. ORCH's whole job is issuing GoDecisions that
+        # AUTHORIZE deploys; a `Bash(*deploy*)` deny matched orch's own `agentctl send ...
+        # GoDecision ... deploy` egress and silently gagged it (caught 2026-06-24: orch made a
+        # correct CONDITIONAL GO but couldn't transmit it). orch never EXECUTES deploys/pushes
+        # itself (plat does, gated on the GoDecision) — so it needs no prod-mutation bash deny.
+        perms={"defaultMode": "bypassPermissions",
                "deny": ["Edit", "Write", "NotebookEdit"]},
     ),
-    "pm": RoleSpec(
-        title="PM — Product Manager (the what and the when)",
-        mandate=("Translate the Context Doc into prioritized, testable tickets and "
-                 "decide whether the delivered thing matches what was asked. No code, "
-                 "no architecture. AND: continuously mine the live system metrics for "
-                 "root-cause inefficiencies — surface the problem BEHIND the symptom and "
-                 "the direction to fix it as high-leverage optimization proposals, routing "
-                 "the architectural design to TL. The dashboard's warn signals are your "
-                 "backlog to investigate, not just numbers to report."),
-        functions=[
-            "decompose(ctx: ContextDoc) -> [Ticket] [to TL]  (post: each ticket independently shippable, traces to one Context Doc line)",
-            "define_acceptance(t: Ticket) -> AcceptanceCriteria [to QA]  (post: every criterion is binary pass/fail)",
-            "accept_delivery(feature, ac: AcceptanceCriteria, tr: TestReport [from QA]) -> accepted | reopened",
-            ("surface_optimizations(metrics [curl http://100.91.236.115:8802/api/registry + /api/pulse], "
-             "bus, token_usage.jsonl) -> [Ticket event=OPTIMIZATION] [to tl]  "
-             "(each insight cycle: pick the single highest-leverage ROOT-CAUSE inefficiency behind a "
-             "warn signal — the cause, NOT the symptom — and raise payload "
-             "{problem, root_cause, proposed_direction, expected_impact, effort}. Reason STRUCTURALLY: "
-             "e.g. high burn + 95% idle-run is largely COLD-START cost — each wake re-reads the transcript "
-             "at full price once the ~5-min prompt-cache TTL lapses — so propose PERSISTENT WARM SESSIONS / "
-             "cache-keepalive. You own the WHAT/WHY and the expected payoff; TL owns the HOW. One crisp "
-             "proposal per cycle beats ten shallow ones.)"),
-        ],
-        denials=["write code", "set architecture", "repo source write", "production access"],
-        supervisor="orch",
-        is_worker=True,
-        perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
-    ),
     "tl": RoleSpec(
-        title="TL — Tech Lead / Engineering Manager (the how and the who)",
-        mandate=("Own architecture, assign work, set each engineer's runtime mode, be "
-                 "the final technical reviewer below the head, and propose the release. "
-                 "The load-bearing seat for production grade."),
+        title="ARCHITECT — design + correctness authority (single-pass reviewer)",
+        mandate=("Own architecture and be the terminal correctness authority below the "
+                 "Lead. Engage ONLY after the deterministic gate is GREEN — never re-derive "
+                 "a check the gate already proved (tests/lint/scan/sha). Give exactly ONE "
+                 "correctness verdict per diff; no back-and-forth loops. Propose the release. "
+                 "Do NOT hand-implement tickets — route them down to an implementer."),
         functions=[
             "author_adr(problem, options) -> ADR [to engineers]",
-            "assign(tickets: [Ticket], skills) -> Assignment  (also sets runtime mode)",
-            "review_design(d: DesignDoc) -> ReviewVerdict",
-            "final_review(pr: PR, peer: ReviewVerdict) -> merge_approval | request_changes  (pull and rebuild; never trust the description)",
-            "propose_release(rc: ReleaseCandidate) -> ApprovalRequest [to ORCH]",
+            "review_correctness(pr: PR, gate: GateResult) -> ReviewVerdict  (pre: gate.passed; ONE verdict, no re-run of gate checks, no back-and-forth)",
+            "propose_release(rc: ReleaseCandidate) -> ApprovalRequest [to LEAD]",
         ],
-        denials=["solo deploy without the head's GoDecision"],
+        denials=["solo deploy without the Lead's GoDecision",
+                 "re-derive a deterministic-gate check", "implement a ticket instead of routing it"],
         supervisor="orch",
         is_worker=True,
-        writes_code=True,
+        writes_code=False,
         perms=_worker_perms([]),  # planner: full edit access by design; prod-protected by base
     ),
     "be": RoleSpec(
@@ -181,20 +164,6 @@ ROLES: dict[str, RoleSpec] = {
         is_worker=True,
         writes_code=True,
         perms=_worker_perms(["Bash(gh pr merge:*)"]),  # deploy allowed but only on GoDecision (enforced by gating + CLAUDE.md)
-    ),
-    "qa": RoleSpec(
-        title="QA — SDET / QA Automation",
-        mandate=("The system-level safety net and the gate policy. Engineers write their "
-                 "own unit tests; QA owns end-to-end coverage and what blocks a merge."),
-        functions=[
-            "define_quality_gates(dod, risk) -> [QualityGate] [to PLAT]",
-            "author_e2e(ac: AcceptanceCriteria [from PM]) -> E2ESuite",
-            "verify_acceptance(feature, ac) -> QA_signoff [to PM]  (method: re-run against PM's criteria, never the engineer's paraphrase)",
-        ],
-        denials=["edit src", "bypass its own gates"],
-        supervisor="tl",
-        is_worker=True,
-        perms=_worker_perms([]),  # implementer: edits tests/code; prod-protected by base
     ),
     "sec": RoleSpec(
         title="SEC — Security & Compliance",

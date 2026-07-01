@@ -16,32 +16,32 @@ OPUS   = "claude-opus-4-8"
 SONNET = "claude-sonnet-4-6"
 HAIKU  = "claude-haiku-4-5-20251001"
 
-ROLES = ("orch", "pm", "tl", "be", "fe", "plat", "qa", "sec")
+# 6-role fleet (v2 redesign): pm folded into orch (LEAD), qa folded into the
+# deterministic gate + tl (ARCHITECT).
+ROLES = ("orch", "tl", "be", "fe", "plat", "sec")
 
 PRESETS: dict[str, dict[str, str]] = {
-    # Ceiling / quality benchmark — max inference, max cost (current go-live).
+    # Ceiling / quality benchmark — max inference, max cost.
     "all-opus": {r: OPUS for r in ROLES},
 
-    # DEFAULT — deep where a miss is expensive (apex-skeptic, architecture, security,
-    # adversarial verify), cheap for implementation (Sonnet is excellent at code).
-    # BE moved OPUS->SONNET: it was the costliest agent and was the only implementer
-    # left on Opus; live data showed ~82% of spend was Opus, BE the biggest slice.
+    # DEFAULT — deep where a miss is expensive (Lead, Architect, security), cheap for
+    # implementation (Sonnet is excellent at code).
     "standard": {
-        "orch": OPUS, "tl": OPUS, "sec": OPUS, "qa": OPUS,
-        "be": SONNET, "pm": SONNET, "fe": SONNET, "plat": SONNET,
+        "orch": OPUS, "tl": OPUS, "sec": OPUS,
+        "be": SONNET, "fe": SONNET, "plat": SONNET,
     },
 
-    # Cost/latency-first — keep the apex skeptic + security sharp, rest on Sonnet.
+    # Cost/latency-first — keep the Lead + security sharp, Architect + rest on Sonnet.
+    # Phase-2 fallback: flip here if the Architect still dominates spend after the gate lands.
     "fast": {
         "orch": OPUS, "sec": OPUS,
-        "tl": SONNET, "qa": SONNET, "be": SONNET,
-        "pm": SONNET, "fe": SONNET, "plat": SONNET,
+        "tl": SONNET, "be": SONNET, "fe": SONNET, "plat": SONNET,
     },
 
     # Rock-bottom — Sonnet for the thinkers, Haiku for the mechanical roles.
     "economy": {
-        "orch": SONNET, "tl": SONNET, "sec": SONNET, "qa": SONNET, "be": SONNET,
-        "pm": HAIKU, "fe": HAIKU, "plat": HAIKU,
+        "orch": SONNET, "tl": SONNET, "sec": SONNET, "be": SONNET,
+        "fe": HAIKU, "plat": HAIKU,
     },
 }
 
@@ -73,8 +73,13 @@ _CHEAP = frozenset({
 
 
 def model_for(role: str, preset: str = DEFAULT_PRESET) -> str:
-    """Model id for `role` under `preset`. Falls back to the default preset."""
-    return PRESETS.get(preset, PRESETS[DEFAULT_PRESET])[role]
+    """Model id for `role` under `preset`. Falls back to the default preset, and for a
+    role absent from the active fleet (e.g. the collapsed pm/qa, still legal bus
+    vocabulary) falls back to OPUS so a stray lookup never crashes a reactor."""
+    table = PRESETS.get(preset, PRESETS[DEFAULT_PRESET])
+    if role in table:
+        return table[role]
+    return PRESETS[DEFAULT_PRESET].get(role, OPUS)
 
 
 def model_for_wake(type_events: list, role: str,

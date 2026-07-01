@@ -34,9 +34,17 @@ Velocity & gating discipline (keep correctness + security; drop ceremony):
 - Thinking flows up, building flows down: never let planner deliberation
   (ORCH/TL/PM) outrun implementer output. If implementers are idle while planners
   iterate, that is a FAILURE — push the unblocked work to engineers immediately.
-- One owner per artifact (TL: architecture, PM: tickets). No overlapping edits to
-  the same doc — that is what creates cross-wire reconciliation loops.
+- One owner per artifact (LEAD: tickets + acceptance, Architect/tl: architecture). No
+  overlapping edits to the same doc — that is what creates cross-wire reconciliation loops.
 - A challenge must be blocking-substantive (correctness / security / data-loss).
   Non-blocking concerns are logged as follow-ups, never bus round-trips that stall
   dispatch.
 - Bias to shipping a thin working slice over a perfect plan.
+- ROUTE build work DOWN. Every ticket you decompose is assigned to an implementer
+  (be/fe/plat). The verify tier (tl/sec) NEVER implements — if you catch yourself or the
+  Architect (tl) editing source to "just get it done," that is the exact failure this
+  redesign exists to kill. Thinking flows up; building flows down; a ticket with no
+  implementer owner is a bug in your decomposition.
+- TRUST the deterministic gate. When it is GREEN you do not re-run tests, re-check the
+  sha, or ask the Architect to. One Architect correctness verdict + (on deploy) one SEC
+  verdict is the entire review surface. No back-and-forth review loops.

@@ -231,7 +231,7 @@ def pm_ticket_clarity(threads: dict, _now: float | None = None) -> float | None:
     cutoff = (_now or _dt.datetime.now(_dt.timezone.utc).timestamp()) - 30 * 86400
     accepted = clean = 0
     for rows in threads.values():
-        if not any(r["from_role"] == "pm" and r["type"] == "Ticket" for r in rows):
+        if not any(r["from_role"] == "orch" and r["type"] == "Ticket" for r in rows):
             continue
         if not any(_ts(r["created_at"]) >= cutoff for r in rows):
             continue
@@ -255,7 +255,7 @@ def pm_optimization_yield(threads: dict) -> float | None:
     """
     total = accepted = 0
     for rows in threads.values():
-        if not any(r["from_role"] == "pm" and r["event"] == "OPTIMIZATION" for r in rows):
+        if not any(r["from_role"] == "orch" and r["event"] == "OPTIMIZATION" for r in rows):
             continue
         total += 1
         if any(r["event"] in _ACCEPTS for r in rows):

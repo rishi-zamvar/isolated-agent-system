@@ -3,10 +3,10 @@ import json
 from profiles import generate, roles
 
 
-def test_generates_exactly_eight_profiles(tmp_path):
+def test_generates_exactly_six_profiles(tmp_path):
     produced = generate.generate_all(tmp_path, system_root="/sys")
-    assert sorted(produced) == ["be", "fe", "orch", "plat", "pm", "qa", "sec", "tl"]
-    assert len([d for d in tmp_path.iterdir() if d.is_dir()]) == 8
+    assert sorted(produced) == ["be", "fe", "orch", "plat", "sec", "tl"]
+    assert len([d for d in tmp_path.iterdir() if d.is_dir()]) == 6
 
 
 def test_each_profile_has_required_files_and_sections(tmp_path):
@@ -36,12 +36,13 @@ def test_orch_denies_code_workers_get_verification_block(tmp_path):
 def test_engineers_get_tdd_hook_others_do_not(tmp_path):
     generate.generate_all(tmp_path, "/sys")
     # all code-writing roles must have the PreToolUse tdd_guard hook
-    for role in ("be", "fe", "plat", "tl", "sec"):
+    # (Architect/tl no longer writes code in the 6-role redesign — routes it down)
+    for role in ("be", "fe", "plat", "sec"):
         st = json.loads((tmp_path / role / "settings.json").read_text())
         assert "hooks" in st and "PreToolUse" in st["hooks"], \
             f"{role} missing PreToolUse tdd_guard hook"
     # non-code-writing roles must NOT have the hook
-    for role in ("pm", "qa", "orch"):
+    for role in ("orch", "tl"):
         st = json.loads((tmp_path / role / "settings.json").read_text())
         assert "hooks" not in st, f"{role} should not have hooks"
 

@@ -29,14 +29,14 @@ def _row(rid, from_role, to_role, rtype, event,
 # ───────────────────────────── _build_threads ─────────────────────────────
 
 def test_build_threads_singletons_when_no_correlation_id():
-    rows = [_row("A", "pm", "tl", "Ticket", "TICKET"),
+    rows = [_row("A", "orch", "tl", "Ticket", "TICKET"),
             _row("B", "tl", "be", "Ticket", "ASSIGNED")]
     threads = _c._build_threads(rows)
     assert len(threads) == 2
 
 
 def test_build_threads_groups_via_direct_correlation():
-    rows = [_row("A", "pm", "tl", "Ticket", "TICKET"),
+    rows = [_row("A", "orch", "tl", "Ticket", "TICKET"),
             _row("B", "tl", "be", "Ticket", "ASSIGNED", correlation_id="A"),
             _row("C", "be", "tl", "PR", "PR_OPENED", correlation_id="A")]
     threads = _c._build_threads(rows)
@@ -45,7 +45,7 @@ def test_build_threads_groups_via_direct_correlation():
 
 
 def test_build_threads_transitive_chain():
-    rows = [_row("A", "pm", "tl", "Ticket", "TICKET"),
+    rows = [_row("A", "orch", "tl", "Ticket", "TICKET"),
             _row("B", "tl", "be", "Ticket", "ASSIGNED", correlation_id="A"),
             _row("C", "be", "tl", "PR", "PR_OPENED", correlation_id="B")]
     threads = _c._build_threads(rows)
@@ -59,7 +59,7 @@ def test_build_threads_empty_input():
 # ──────────────────────────── pm_ticket_clarity ───────────────────────────
 
 def _pm_thread(root, has_accept=True, has_reopen=False):
-    rows = [_row(root, "pm", "tl", "Ticket", "TICKET")]
+    rows = [_row(root, "orch", "tl", "Ticket", "TICKET")]
     if has_accept:
         rows.append(_row(root + "_a", "tl", "pm", "ReviewVerdict", "ACCEPT",
                          ts=_T1, correlation_id=root))
@@ -106,7 +106,7 @@ def test_pm_ticket_clarity_excludes_threads_without_accept():
 # ──────────────────────────── pm_optimization_yield ───────────────────────
 
 def _opt_thread(root, accepted=True):
-    rows = [_row(root, "pm", "tl", "Ticket", "OPTIMIZATION")]
+    rows = [_row(root, "orch", "tl", "Ticket", "OPTIMIZATION")]
     if accepted:
         rows.append(_row(root + "_a", "tl", "pm", "ReviewVerdict", "ACCEPT",
                          ts=_T1, correlation_id=root))
