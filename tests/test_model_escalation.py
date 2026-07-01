@@ -251,3 +251,64 @@ def test_detect_edited_returns_false_when_sig_unchanged():
 
 def test_detect_edited_returns_true_on_json_heuristic():
     assert agent_reactor._detect_edited("same", "same", '"Edit" something')
+
+
+# ---------------------------------------------------------------------------
+# Silent model-downgrade detection (spec §11 / BUILD-AND-VERIFY.md: account-level
+# fallback at high pool utilization can quietly serve a cheaper model than the
+# one requested via --model — previously deferred, never wired to a live signal).
+# ---------------------------------------------------------------------------
+
+def test_requested_model_parses_flag_from_cmd():
+    cmd = agent_reactor.claude_cmd("sec", model=OPUS)
+    assert agent_reactor._requested_model(cmd) == OPUS
+
+
+def test_requested_model_none_when_flag_absent():
+    assert agent_reactor._requested_model(["claude", "-p", "hello"]) is None
+
+
+def test_tier_rank_orders_opus_above_sonnet_above_haiku():
+    assert agent_reactor._tier_rank(OPUS) > agent_reactor._tier_rank("claude-sonnet-4-6")
+    assert agent_reactor._tier_rank("claude-sonnet-4-6") > agent_reactor._tier_rank(HAIKU)
+
+
+def test_tier_rank_unknown_model_is_zero():
+    assert agent_reactor._tier_rank("") == 0
+    assert agent_reactor._tier_rank("some-future-model") == 0
+
+
+def _read_last_json_line(path):
+    import json as _json
+    lines = path.read_text(encoding="utf-8").strip().splitlines()
+    return _json.loads(lines[-1])
+
+
+def test_log_usage_flags_downgrade_when_actual_tier_is_cheaper(tmp_path):
+    log = tmp_path / "token_usage.jsonl"
+    d = {"modelUsage": {"claude-haiku-4-5-20251001": {}}, "usage": {}}
+    agent_reactor._log_usage(log, "sec", d, "sid1", False, False,
+                             requested_model=OPUS)
+    rec = _read_last_json_line(log)
+    assert rec["downgraded"] is True
+    assert rec["requested_model"] == OPUS
+    assert rec["model"] == "claude-haiku-4-5-20251001"
+
+
+def test_log_usage_no_downgrade_when_tiers_match(tmp_path):
+    log = tmp_path / "token_usage.jsonl"
+    d = {"modelUsage": {OPUS: {}}, "usage": {}}
+    agent_reactor._log_usage(log, "sec", d, "sid1", False, False,
+                             requested_model=OPUS)
+    rec = _read_last_json_line(log)
+    assert rec["downgraded"] is False
+
+
+def test_log_usage_no_downgrade_when_requested_model_unknown(tmp_path):
+    # legacy call sites that don't pass requested_model must not false-positive
+    log = tmp_path / "token_usage.jsonl"
+    d = {"modelUsage": {"claude-haiku-4-5-20251001": {}}, "usage": {}}
+    agent_reactor._log_usage(log, "sec", d, "sid1", False, False)
+    rec = _read_last_json_line(log)
+    assert rec["downgraded"] is False
+    assert rec["requested_model"] == ""

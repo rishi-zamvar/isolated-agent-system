@@ -161,13 +161,44 @@ def _pick_model(role: str, store_path, rows=None) -> str | None:
     return model_for_wake(te, role, os.environ.get("FLEET_PRESET", "standard"))
 
 
+# Tier rank for detecting a silent account-level model fallback (spec §11 /
+# BUILD-AND-VERIFY.md "Model auto-fallback at >=50% pool use" — deferred at
+# scaffolding time, never wired to a live signal). At high account utilization
+# `claude -p` can silently serve a cheaper model than the one we requested via
+# --model; for SEC/TL/QA that quietly weakens the adversarial check. rank 0
+# means "unknown" (never counts as a downgrade — we don't guess).
+_TIER_RANK = {"opus": 3, "sonnet": 2, "haiku": 1}
+
+
+def _tier_rank(model: str) -> int:
+    m = (model or "").lower()
+    for name, rank in _TIER_RANK.items():
+        if name in m:
+            return rank
+    return 0
+
+
+def _requested_model(cmd: list[str]) -> str | None:
+    """The --model value we asked for, parsed back out of the built claude_cmd."""
+    if "--model" in cmd:
+        i = cmd.index("--model")
+        if i + 1 < len(cmd):
+            return cmd[i + 1]
+    return None
+
+
 def _log_usage(token_log: Path, role: str, d: dict, sid: str,
-               edited: bool, compacted: bool) -> None:
+               edited: bool, compacted: bool, requested_model: str | None = None) -> None:
     u = d.get("usage") or {}
     in_fresh = u.get("input_tokens") or 0
     in_cache = u.get("cache_read_input_tokens") or 0
+    actual_model = next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or ""
+    actual_rank, requested_rank = _tier_rank(actual_model), _tier_rank(requested_model or "")
+    downgraded = bool(actual_rank and requested_rank and actual_rank < requested_rank)
     rec = {"role": role,
-           "model": next(iter(d.get("modelUsage") or {}), "") or d.get("model", "") or "",
+           "model": actual_model,
+           "requested_model": requested_model or "",
+           "downgraded": downgraded,
            "in": in_fresh + in_cache,
            "in_fresh": in_fresh,
            "in_cache": in_cache,
@@ -176,6 +207,11 @@ def _log_usage(token_log: Path, role: str, d: dict, sid: str,
            "cost": d.get("total_cost_usd"), "edited": edited,
            "dur_ms": d.get("duration_ms"), "turns": d.get("num_turns"),
            "compacted": compacted, "session_id": sid, "ts": time.time()}
+    if downgraded:
+        print(f"[reactor:{role}] MODEL DOWNGRADE: requested {requested_model}, "
+              f"got {actual_model} — account-level fallback likely fired "
+              f"(spec §11 risk); adversarial rigor may be reduced this run.",
+              flush=True)
     try:
         with open(token_log, "a", encoding="utf-8") as f:
             f.write(json.dumps(rec) + "\n")
@@ -215,7 +251,8 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
                 except OSError:
                     pass
             edited = _detect_edited(sig0, sig1, json.dumps(d))
-            _log_usage(token_log, role, d, sid, edited, compacted)
+            _log_usage(token_log, role, d, sid, edited, compacted,
+                       requested_model=_requested_model(cmd))
             print(d.get("result", ""), flush=True)
         except Exception:
             print(r.stdout or "", flush=True)
