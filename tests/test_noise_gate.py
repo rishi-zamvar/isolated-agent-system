@@ -445,3 +445,51 @@ def test_ac1_store_read_once_per_wake_on_actionable(tmp_path):
     assert len(unread_calls) <= 1, (
         f"Expected at most 1 unread store peek per wake, got {len(unread_calls)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Robustness — peek failure must not kill the reactor or drop the wake
+# ---------------------------------------------------------------------------
+
+def test_peek_failure_falls_back_to_drive_once(tmp_path):
+    """On store error during peek, reactor must fall back to drive_once (legacy path)
+    rather than silently dropping the actionable wake."""
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be")
+
+    spawned = []
+    import sqlite3
+    with patch.object(_store, "inbox", side_effect=sqlite3.OperationalError("database is locked")):
+        agent_reactor.react_loop(
+            "be", str(wake_dir),
+            runner=lambda cmd, compacted=False: spawned.append(cmd),
+            poll=0, max_iters=1,
+            store_path=str(tmp_path / "store.db"),  # path exists check bypassed by patch
+        )
+    assert len(spawned) == 1, "peek failure must NOT drop the wake — drive_once must be called"
+
+
+def test_peek_failure_does_not_terminate_reactor(tmp_path):
+    """A transient store error during peek must not escape react_loop."""
+    wake_dir = tmp_path / "wakes"
+    wake_dir.mkdir()
+    _write_wake(wake_dir, "be", "w1")
+    _write_wake(wake_dir, "be", "w2")
+
+    import sqlite3
+    call_count = [0]
+    def flaky_inbox(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise sqlite3.OperationalError("transient lock")
+        return []
+
+    with patch.object(_store, "inbox", side_effect=flaky_inbox):
+        drives = agent_reactor.react_loop(
+            "be", str(wake_dir),
+            runner=lambda cmd, compacted=False: None,
+            poll=0, max_iters=2,
+            store_path=str(tmp_path / "nonexistent.db"),
+        )
+    # reactor must survive the transient error and complete both iterations

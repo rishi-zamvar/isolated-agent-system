@@ -1,0 +1,4 @@
+============================= test session starts =============================
+collected 22 items
+
+tests\test_noise_gate.py ...........

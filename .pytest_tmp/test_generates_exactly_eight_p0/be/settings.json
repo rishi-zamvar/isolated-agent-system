@@ -1,0 +1,26 @@
+{
+  "model": "claude-sonnet-4-6",
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(git push origin main:*)",
+      "Bash(git push:* main)",
+      "Bash(*deploy*)",
+      "Read(**/secrets/**)",
+      "Read(**/.env.prod)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/sys/hooks/tdd_guard.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+# Carry-forward brief for `be` (semantic working set)
+
+You are resuming on a Librarian-curated working set selected by on-device relevance.
+Architecture is pinned below; only the past work related to your current task was kept.
+Unrelated/settled work was filed to the cabinet — ask ORCH to `recall` it if needed.
+
+## Codebase & architecture (always retained)
+- tl→be  ContextDoc/ARCH_MAP GRDB persistence with 27 migrations, TCA architecture
+
+## Relevant to your current work (similarity-gated)
+- (0.76) be→tl  PR/PR_OPENED pixel art palette tweak for the deck
+
+Resume your role from here.

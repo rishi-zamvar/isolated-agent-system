@@ -1,0 +1,23 @@
+{
+  "model": "claude-opus-4-8",
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(*deploy*)",
+      "Bash(kubectl apply:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/sys/hooks/tdd_guard.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

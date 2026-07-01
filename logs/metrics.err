@@ -1,0 +1,4 @@
+C:\ZeeCloud\metrics_dashboard.py:46: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  c = conn(); now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")  # minute bucket
+C:\ZeeCloud\metrics_dashboard.py:46: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  c = conn(); now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")  # minute bucket

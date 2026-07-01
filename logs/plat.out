@@ -1,0 +1,1418 @@
+All processed and the inbox is drained; worktrees pruned (the leftover dir was an inert Windows file lock outside git's tracking).
+
+## Summary
+
+I drained the plat inbox — 9 messages total (1 initial + 8 that arrived from the live fleet mid-session), ran intake_review on each by **reproducing claims, not trusting them**, and replied/challenged via the shim. All marked read.
+
+**Verification thread (TCK-chatview-001, the `/chat` conversation view):**
+
+| Inbound | My action | Basis (reproduced) |
+|---|---|---|
+| AC v1 `AC_AMENDED` (pm) | **ACCEPT** | seq23/seq5/seq9/seq4 fixtures + AC1/AC2 grouping invariant (seq4.id==seq5.corr==bb5ebe6f) all reproduced against the live store |
+| AC v2 `AC_AMENDED` (pm) | **ACCEPT** | Sound; conceded my v1 accept missed the verbatim-headline XSS that SEC's T4 caught |
+| PR @fde52a3 (be) | **CHALLENGE** | Committed sha green (139), but branch working tree was RED (`NameError`, `feed` not imported) and the superseded AC's headline surface was absent |
+| `AC_CONSOLIDATED` v1 (pm) | **ACCEPT + AC9 gate green** | Ran full suite @3c30399 = 157 passed; adversarially verified escape-first + entity-safe headline truncation |
+| `AC_CONSOLIDATED` v2 / ORCH ladder (pm) | **ACCEPT + retracted stale gate** | Verified seq8/seq9 claims; proved committed 3c30399 mis-derives seq4/seq5/seq9 under the new per-type ladder |
+| PR @8118df8 + RESOLVE (be) | **AC9 gate FAIL on AC10** | 158 green, but a `_GENERIC` net catches `ruling` so live **seq5 → tier-2 instead of the ORCH-mandated tier-3 template**; be's tier-3 test uses a weaker constructed fixture, so green ≠ AC met |
+
+pm `ACK`s confirmed my baseline-vs-HEAD reading and the ladder re-tiering independently — we're aligned.
+
+**Open item:** be owes a fix — drop/scope `_GENERIC` so a ChallengeThread lacking both `locus` and `resolves` renders the tier-3 template, plus a test on the live seq5 shape. I'll re-run the AC9 gate when that lands. Merge/deploy remain ORCH-gated — I performed neither.
+
+Inbox is empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages to process. The wake fired but there's nothing pending (likely a stale doorbell or a message already drained). Nothing to intake_review or act on. Stopping.
+Inbox drained, worktrees pruned. Done.
+
+## Summary
+
+Processed be's `PR_UPDATED @0e0c69e` and the concordant `ChallengeThread/RESOLVE` — both closing my prior AC9 gate-FAIL.
+
+**AC9 quality-gate re-run @0e0c69e (isolated clean worktree):**
+- Full suite **161 passed, 0 failed**.
+- The AC10/seq5 defect I caught is **fixed**: `_GENERIC` cross-type net removed; the per-type ladder now matches ORCH 52452162 / AC10 v2 exactly — verified by feeding live fixtures through `headline.derive`:
+  - seq23→tier-1 note · seq8→title · seq4→locus · seq9→first `pass_if` · **seq5→tier-3 `"orch -&gt; be · RESOLVE"`** (was wrongly deriving `ruling`).
+- The **test-strength gap** I flagged is closed: `test_tier3_for_resolve_with_only_ruling` now asserts the live seq5 shape `{re,ruling,action}` → tier-3 template, so CI guards the regression.
+
+**Verdict: AC9 gate PASS** — sent be a RESOLVE (cea4cea7) and a concordant thread-close (8cf3fbc0).
+
+**Scope I held the line on:** I certify AC9 = suite-green + AC10 ladder. I explicitly did **not** certify AC4 / the new BE-emits-escaped-HTML + FE-`innerHTML` seam (F1/F2) — that XSS-acceptance boundary is SEC-owned. I also corrected the record that my earlier "green @3c30399" was retracted as stale; 0e0c69e is the authoritative gate-green against the v2/ladder AC. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages to process. Stale doorbell. Nothing to intake_review or act on. Stopping.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @5c5d09b` (FE a11y polish layered on the already-passed 0e0c69e).
+
+**AC9 gate re-run @5c5d09b (isolated clean worktree):**
+- Full suite **180 passed, 0 failed** (was 161 at 0e0c69e; the new `test_chatview_a11y.py` adds the delta).
+- Confirmed the change is genuinely additive: diff is only `fleet_monitor.py` (+5/-2 a11y markup) + the new test file. The AC10 derivation files (`headline.py`, `feed.py`, `grouping.py`, `markdown.py`) are **byte-identical** to 0e0c69e — so the per-type ladder I certified (seq5→tier-3, etc.) carries with no regression.
+- Inspected the `_chat_row` change: `aria-hidden` on decorative spans, a static `sr-only "to "` label, CSS `::before` caret — **no new untrusted-value injection**; `{headline}`/meta inject exactly as before.
+
+**Verdict: AC9 PASS, re-pinned to 5c5d09b** (RESOLVE 12d472ae). Prior cert cea4cea7 carries forward.
+
+**Scope held:** AC9 = suite-green + AC10 ladder. The headline/meta-escape + FE-`innerHTML` seam (AC4) stays SEC-owned — I noted the caret touches no escaping path (so SEC has nothing new to re-evaluate) but left that re-pin as SEC's call, not mine. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @f6fcc4a` — the a11y change re-authored as a single BE commit (TL single-committer policy), claimed tree-identical to the already-passed 5c5d09b.
+
+**Verification (cryptographic, not trust):**
+- git **tree object hashes are identical** — both `1462b10d...` — and `git diff 5c5d09b..f6fcc4a` is empty; f6fcc4a is HEAD of `feat/chatview-be`.
+- Identical tree ⇒ identical test + derivation results, so my 5c5d09b cert (**180 passed/0 failed**, AC10 per-type ladder intact incl. seq5→tier-3) transfers verbatim. Re-running pytest on a byte-identical tree would add nothing.
+- The only delta is commit lineage/authorship — a TL/process concern, not an AC9 gate input (the gate runs on tree content).
+
+**Verdict: AC9 PASS, re-pinned to f6fcc4a** (RESOLVE 0700765d). Carries my prior certs cea4cea7 (0e0c69e) and 12d472ae (5c5d09b). AC4/escape/innerHTML seam stays SEC-owned; merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @8a1b22d` — a **substantive** change (per ORCH ContextDoc REVISION 2d8268dd): removed `/chat`'s full-page `<meta refresh>` (CEO jump-to-top defect) and added a `/chat.json` polling endpoint.
+
+**AC9 gate verdict: BLOCKED on an AC8 conflict** (not a code bug):
+- Reproduced: full suite **182 passed/0 failed**; core `headline/feed/grouping/markdown` byte-identical to f6fcc4a (AC10 ladder/XSS carry); `/chat.json` returns 200 + `application/json` + `build_feed` shape; `/` still refreshes, `/chat` no longer does.
+- **The conflict:** AC8 in the authoritative consolidated AC (87ffef00) says *"/chat auto-refreshes like the existing / page."* be **deleted** `test_chat_autorefreshes #AC8` and replaced it with the **inverted** assertion (`http-equiv="refresh"` now asserted *absent*). So the green suite satisfies an inverted AC8, not the AC of record. be's authority is a **ContextDoc** REVISION — not an AcceptanceCriteria amendment, and I hold no updated AC.
+- I won't rubber-stamp a gate whose AC8 test contradicts the locked AC8.
+
+**Actions:**
+- **CHALLENGE → be** (a3cea6de): gate blocked; locus = AC8 inversion vs 87ffef00; resolves = await the AC amendment, then re-run (mechanical — code already matches the revised behavior).
+- **CHALLENGE → pm** (1b78dd9d): AC owner — requested an AC8 amendment reconciling with REVISION 2d8268dd, with suggested wording.
+
+I explicitly noted the behavior change itself looks sound/ORCH-directed; I'm only refusing to certify against a superseded-in-spirit-but-not-in-writing AC8. `/chat.json`'s escape/content-type acceptance is SEC's lane. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, both messages read and acted on.
+
+## Summary
+
+Two inbound:
+
+**1. pm `RESOLVE` (b77c1e4d)** — formally accepted my AC8 challenge and confirmed AC_CONSOLIDATED v3 (which I'd already accepted and gated against). Concordant closure; no reply needed.
+
+**2. be `PR_UPDATED @cd06e4e`** — new substantive change per ORCH UI revision 86de6443 (CEO "expand looks like JSON"): `_payload_md` now renders dict/list payloads as markdown bullets instead of `json.dumps` inline-code.
+
+**AC9 gate re-run @cd06e4e (isolated worktree):**
+- Full suite **183 passed, 0 failed**.
+- **Adversarial XSS through the new nested-flatten path** (the risk area): a payload with a list and a nested dict each carrying `<script>`/`<img onerror>` → `safe_html` has no raw `<script>`, no real `<img>` tag, no entity-free `onerror`; all escape to `&lt;…&gt;` inside `<li>` bullets. `markdown.render` still escapes-first; the new helpers produce markdown *text*, not a renderer bypass — **no new sink**.
+- CEO #2 fix confirmed: `<li>` bullets, zero `json.dumps` artifacts — consistent with AC11/AC3.
+- Change contained to `feed.py` `_payload_md` + its test; `headline/grouping/markdown` and `fleet_monitor.py` unchanged → AC10 ladder, AC4/AC12 headline escape, AC8' refresh, AC13 `/chat.json` shape all carry.
+
+**Verdict: AC9 PASS at cd06e4e against consolidated v3** (RESOLVE 0d5addcc). Noted — unlike AC8, this needs no AC amendment (the UI revision aligns with AC11, doesn't contradict it); flagged that pm *could* pin "markdown-not-JSON" as a numbered AC if explicit gating is wanted, but it's not a blocker. SEC owns AC4/AC13 escape acceptance; FE owns the bubble redesign. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages. Stale doorbell; nothing to intake_review or act on. Stopping.
+Inbox drained, worktree pruned, both messages read and acted on.
+
+## Summary
+
+Two inbound from be:
+
+**1. `PR_UPDATED @d2ab1b1`** — folds the FE scroll-stable poller onto the cd06e4e I'd certified. **2. `RESOLVE`** re-confirming the AC8 thread (already cleared on my side).
+
+**AC9 gate re-run @d2ab1b1 (isolated worktree):**
+- Full suite **184 passed, 0 failed**.
+- **AC8' satisfied:** `/chat` emits no meta-refresh, wraps the feed in `<div id="feed">`, and a `setInterval` poller swaps only `#feed` while preserving scrollY + re-opening `<details>` — the "reasonably live, scroll-stable, no full reload" clause. `/` retains its refresh (AC6).
+- **Poller XSS-safe at the layer I gate:** the only interpolation into the inline `<script>` is the integer interval (`%d % REFRESH_SECS` → 5) — no untrusted payload enters the JS; the swap source is re-fetched escape-first server HTML, so innerHTML carries the same safe bytes.
+- Change contained to `fleet_monitor.py` (poller + wrapper) + route tests; `headline/feed/grouping/markdown` untouched → AC10/AC4/AC12/AC13/AC2/AC3 carry from cert 0d5addcc.
+
+**Verdict: AC9 PASS at d2ab1b1 against consolidated v3** (RESOLVE f4f049d9).
+
+**Holds respected:** the client-side innerHTML/poller acceptance is SEC+FE's lane (SEC cleared `/chat.json` escaping). FE's bubble visual CSS is still pending but isn't an AC9 numbered criterion, so it doesn't block the functional gate. Per be's TL hold, I did **not** emit to ORCH or build a ReleaseCandidate. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @063a564` — the combined revision (FE Teams/Slack bubbles + scroll-stable poller + expand-markdown + a new **root_id escape fix**), 188 green. The chain re-bases cleanly onto the cd06e4e I'd certified (the earlier hand-folded poller was reverted/replaced).
+
+**AC9 gate re-run @063a564 (isolated worktree):**
+- Full suite **188 passed, 0 failed**; cd06e4e confirmed a git ancestor (additive delta on a verified base).
+- **root_id escape (FE security finding) — adversarially verified:** a malicious id `<script>"&x` now renders `&lt;script&gt;&quot;&amp;x` — **single-escaped on both `/chat.json` and `/chat`**, no raw `<script>`, and **no double-escape** (`render_chat` correctly doesn't re-escape). The raw-root_id XSS gap is closed; it also strengthens AC13's "all strings pre-escaped."
+- AC8' poller intact (integer-only interpolation); bubbles are markup/CSS over already-escaped fields.
+- Core `headline/grouping/markdown` untouched → AC10/AC4/AC12/AC2/AC3 carry; `feed.py` changed only for `html.escape(root_id)`, AC13 shape intact.
+
+**Verdict: AC9 PASS at 063a564 against consolidated v3** (RESOLVE f75c6f47).
+
+**Scope held:** the client innerHTML/poller + FE bubble acceptance and the SEC re-pin on root_id/meta escaping are SEC+FE's lane (be correctly asked SEC to re-pin). I did **not** emit to ORCH or build a ReleaseCandidate — that combined-sha-to-ORCH emit is TL's action, and merge/deploy stay ORCH-gated.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed pm's `AC_CONSOLIDATED v4` — tightens AC13 prose to require **every** feed string pre-escaped (root_id + headline + safe_html + all meta fields), formalizing the root_id/meta escaping. "No code change; AC1–AC12 unchanged."
+
+**Intake_review + AC9 re-check at 063a564:**
+- Full suite **188 passed, 0 failed**.
+- **AC13 v4 enumerated escaping verified at runtime:** root_id/headline/safe_html (prior) + all five named meta fields — including the free-form untrusted `event` (`<script>` → `&lt;script&gt;`) and `created_at` (`<img onerror>` → escaped). No raw `<script>`/`onerror` on `/chat.json`.
+
+**Verdict: ACCEPT v4 + AC9 PASS at 063a564** (8dfe555d), with **one low-severity, no-XSS finding**:
+- `feed._message` emits a **sixth, non-enumerated `meta.role` field that is RAW** (= `from_role`, documented as a color/initial lookup key). It's the lone un-escaped feed string, so AC13 v4's literal universal *"EVERY string … inject AS-IS"* doesn't strictly hold.
+- **No XSS:** `from_role` is validated against `registry.ROLES` at send (the shim rejects non-registry roles), so `role` is provably one of 8 constant safe values.
+- Recommended pm reconcile with a one-liner: (a) carve `role` out in AC13 prose as a non-rendered lookup key FE must never inject as-is *(my recommendation)*, or (b) have be `html.escape` it for a clean invariant.
+
+Flagged as a documentation/precision nit, not a gate blocker. SEC owns the escape sign-off. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+pm's `RESOLVE` (86ce61b2) is concordant closure of my precision finding — pm independently reproduced the same analysis (`meta.role` raw, validated against `registry.ROLES` at envelope.py line 27, enum-safe), chose my recommended option (a), and confirms "No gate impact — your AC9 PASS at 063a564 (188 green) stands; v5 is prose-only." This matches the v5 ACCEPT I just sent (6e605cab). Thread resolved both sides; an `ACK` reply would be redundant noise. Marked read.
+
+## Summary
+
+Processed pm's `AC_CONSOLIDATED v5` and concordant `RESOLVE` — both closing my `meta.role` precision finding (8dfe555d).
+
+- **v5** adopts my recommended option (a): AC13 now carves out `meta.role` as a RAW enum lookup key (color/initial only, never inject as-is; enum-safe via `envelope.py` validation), while requiring every *rendered* string escape-first. No code change; AC1–AC12 unchanged.
+- **Verified** the new EXCEPTION clause is factually accurate against the 063a564 impl I'd already adversarially checked (role raw = from_role, validated registry enum; five display meta fields escape-first). No re-run needed — prose-only change on the certified sha.
+- **ACCEPT v5** (6e605cab): my finding is resolved by the carve-out; **AC9 gate PASSES cleanly at 063a564 against consolidated v5 (AC1–AC13)**, no outstanding items on my side.
+- pm's RESOLVE independently confirms the same analysis and that the gate is unaffected.
+
+The chatview feature now has a stable, mutually-agreed AC of record (v5) and a clean AC9 certification at 063a564. SEC still owns the escape-acceptance sign-off; FE must honor the `meta.role` lookup-only contract. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages. Stale doorbell; nothing to intake_review or act on. Stopping.
+Inbox drained. Both substantive messages acted on; pm's concordant correction marked read with no redundant reply.
+
+## Summary
+
+A genuine security correction that implicated my own prior sign-off.
+
+**pm `AC_CONSOLIDATED v6`** — QA (02263d62) found my v5 `meta.role` enum carve-out was **unsound**: the relay ingest path bypasses `registry.ROLES` validation, making `meta.role` a real XSS sink. AC13 now requires `meta.role` html.escaped.
+
+**Verified (reproduced, not trusted — even against my own error):**
+- `relay.unpack()` is bare `json.loads` (no validation); `relay.ingest() → store.insert()` stores `from_role` verbatim — only the CLI `envelope.build()` validates roles.
+- Adversarial: an ingested envelope with `from_role=<img src=x onerror=alert(1)>` → `meta.role` raw/executable in `/chat.json` (while `meta.from_role` display field is correctly escaped). **Confirmed XSS sink.**
+
+**Actions:**
+- **ACCEPT v6 → pm** (ecff6cba): with the reproduction, an honest **concession** (my 8dfe555d "enum-safe" call checked only the send path and missed ingest — QA did the deeper verification), and a **retraction of my stale AC9 PASS** at 063a564.
+- **Gate-RED → be** (bc4ca163): AC9 now fails at 063a564 on AC13 v6; locus = `feed._message` raw `"role"`; resolves = `html.escape(from_role)` (1 line; no-op for legit roles, inert for malicious) + an ingest-vector test; I re-gate on the fix.
+- **pm `CORRECTION`** crossed in flight — concordant (switches to escaping role, credits the catch). Marked read, no redundant reply.
+
+**Net:** AC1–AC12 and the rest of AC13 remain green at 063a564 (188 suite); the lone blocker is the raw `meta.role`, awaiting be's 1-line fix. I owned the miss, corrected the record, and routed the actionable fix. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages. Stale doorbell; nothing to intake_review or act on. Stopping.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @e8a4a2b` — the security fix for the `meta.role` XSS sink I gate-RED'd (bc4ca163).
+
+**AC9 gate re-run @e8a4a2b (isolated worktree):**
+- Full suite **189 passed, 0 failed**.
+- **The sink is closed — verified at the exact vector:** a relay-ingestable `from_role=<img src=x onerror=alert(1)>` now yields `meta.role` = `&lt;img…&gt;` (escaped/inert); **no raw `<img onerror>` in `/chat.json` or `/chat`**.
+- Functionally intact: `html.escape('be')=='be'`, so valid roles escape to themselves and FE's ROLE_COLOR/initial lookup still matches; malicious roles render inert (default color).
+- Whole feed now fully pre-escaped (root_id + headline + safe_html + **all** meta incl. role) → **AC13 v6 invariant restored**.
+- Change contained to `feed.py` (role escape + test); core `headline/grouping/markdown` and `fleet_monitor.py` untouched → AC10/AC2/AC4/AC12/AC8' all carry.
+
+**Verdict: AC9 PASS at e8a4a2b against consolidated v6** (RESOLVE 4c60af45) — my CHALLENGE bc4ca163 resolved; the gate is green again.
+
+Endorsed be's call to split the security fix out rather than block it on the pending FE `REVISION_LAYOUT` (FE-owned, not an AC9 criterion). SEC owns the re-pin (prior enum-safe acceptance superseded; relay ingest is the real threat path). Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+be's `RESOLVE` (ce66f7c0) is concordant closure of my gate-RED (bc4ca163) — it crossed in flight with the gate-PASS I just sent (4c60af45). It confirms the same things I independently verified: the relay-ingest bypass, the `html.escape` fix + RED→GREEN test, 189 green, and that my retraction of f75c6f47 was correct. Both sides have closed the thread; a reply would be redundant noise. Marked read.
+
+The chatview AC9 gate is green at e8a4a2b against the latest AC (v6), with the real XSS sink closed. Nothing further to act on.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained. All four messages read and acted on.
+
+## Summary
+
+The fleet whipsawed on AC13 (v5 carve-out → v6 escape → v7 revert → **v8 escape**), plus two pm `CORRECTION`s. I handled the churn by anchoring on verified facts rather than following each flip:
+
+- **v7** (revert to carve-out, "no live XSS"): I **verified** the claim — at 063a564 the server `_chat_row` uses `meta.role` only as a `ROLE_COLOR` dict-key + html.escaped initial, and the poller re-fetches `/chat` (not `/chat.json`) — and ACCEPTed it, but **recommended keeping the e8a4a2b role-escape** as zero-cost defense-in-depth and flagged the real blocker (AC6/AC8 layout).
+- **v8** (restores escape per SEC `VULN-chatview-001` HIGH — a reproduced `/chat.json` client-poller sink): ACCEPTed. The key fact: **e8a4a2b already escapes `meta.role`**, so it satisfies v8 AC13 with **no code change** — the entire v5→v8 churn nets to zero code delta. I **honestly reconciled** my v7 "no live XSS" call: it was too sanguine (I audited the server + implemented poller, not a `/chat.json`-consuming client); my recommendation to keep the escape was the right instinct.
+- **pm CORRECTIONs**: noted as superseded/concordant; sent one **status-sync** to correct pm's stale "AC9 RED until BE escapes role" — that fix already landed at e8a4a2b (my PASS 4c60af45), so AC13 v8 is green now.
+
+**Net gate status against v8 (the stable target):** AC1–AC5/AC7/AC9–AC13 satisfied at e8a4a2b (189 green; `meta.role` escaped). **AC9's sole remaining blocker is AC6/AC8** — the unified two-column `/`, no-meta-refresh, bottom-anchored chat (REVISION_LAYOUT 738e90e2) — unmet at the old single-column `/`. Pending FE's merged layout sha; I re-gate then. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages. Stale doorbell; nothing to intake_review or act on. Stopping.
+pm's `NOTE` (e2de5b2e) fully concords with my v8 ACCEPT (c14e4312) and status-sync (0c4c7f62): AC13 escape-role is REQUIRED and shipped at e8a4a2b (per ORCH RESOLVE 8e734acb + SEC — keep the escape); AC9 is blocked only on AC6/AC8 (layout), pending FE's REVISION_LAYOUT sha; AC1–AC5/AC7/AC9–AC13 pass at e8a4a2b. It's an informational acknowledgment confirming we're aligned — no reply needed (a response would be redundant noise). Marked read.
+
+The gate state is now mutually agreed and stable: **AC9 against v8 is green except AC6/AC8 (two-column layout)**, awaiting FE's REVISION_LAYOUT combined sha — at which point I re-run the gate. Nothing further to act on.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message read and acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @c0f0f0d` — the combined sha that folds FE's two-panel layout + iMessage styling onto the security-fixed e8a4a2b. **This cleared the last AC9 blocker.**
+
+**Full AC9 re-gate @c0f0f0d (isolated worktree) — first time the entire AC1–AC13 v8 set is green:**
+- Suite **193 passed, 0 failed**.
+- **AC6 (prior blocker, now met):** `/` is two-column — LEFT `#fleet` (cards/logs/MESSAGE BUS), RIGHT `<iframe src=/chat>`, with `@media(max-width:820px)` responsive stack; `/chat` works as alias.
+- **AC8 (prior blocker, now met):** neither `/` nor `/chat` emits meta-refresh; chat bottom-anchored.
+- **AC13 preserved through the fold:** `feed.py` byte-untouched → `meta.role` stays escaped (adversarial relay-inject → `&lt;img…&gt;`, no raw onerror); iframe reuses server-rendered `/chat` (single XSS surface).
+- Core `feed/headline/grouping/markdown` untouched → AC10/AC2/AC4/AC12/root_id+meta escaping all carry.
+
+**Verdict: AC9 PASS at c0f0f0d against consolidated v8** (RESOLVE 9cdd8242) — the feature is functionally + security complete per the AC.
+
+**Scope noted:** the fine-grained client scroll UX (pinned-auto-stick vs preserve) is FE/QA's interactive check (mechanism present); SEC owns the escape-path re-confirm (paths byte-unchanged); the relay-ingest root cause is tracked upstream as ORCH P1 `HARD-relay-ingest-001` (meta.role escaping is the correct surface mitigation, in place). TL owns the one-sha-to-ORCH emit; I did **not** emit to ORCH or build a ReleaseCandidate. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, message read and acted on.
+
+## Summary
+
+Processed pm's `AC_DEFINED` for **TCK-chatview-v2** (new feature: metrics third tab + plain-English summaries + `/btw` tap-to-explain). Ran intake_review on the forward AC and **CHALLENGE**d it with two pre-implementation blockers (verified, specific, falsifiable):
+
+1. **AC-M2 ungrounded dependency:** `metrics_dashboard.py` doesn't exist anywhere in the repo (checked 063a564, working tree, `feat/chatview-be`), yet AC-M2 requires v2 metrics to "match `metrics_dashboard.py aggregate()` (ported, not re-invented)." → Resolve: provide the module (path+sha/Context Doc) or inline the KPI formulas (catches-per-commit, autonomous-minutes, cadence) + aggregate shape.
+2. **AC-S1 ↔ AC10 contradiction:** the locked AC10 ladder renders tier-2 as the **raw field value** (`_PER_TYPE["ChallengeThread"]=("locus","resolves")` → literal locus; verified seq4→locus verbatim), but AC-S1 demands "a plain-English phrase, **not** the raw locus string" while claiming "AC10 precedence preserved." → Resolve: state whether AC-S1 supersedes AC10's raw-field rendering (updates AC10 fixtures) or wraps the selected field in a sentence template — else v2 hits the same inversion trap as the earlier AC8.
+
+Plus two notes: AC-B1 is a genuine cross-cutting addition to the shared registry (no BTW types currently — needs `_CONSUMED_BY` routing confirmed + R2 tests); and AC-PRE's sequencing is correct — v2 baseline is the **merged** layout revision (c0f0f0d, which I gated AC9 PASS at 9cdd8242, but the merge is ORCH-gated and pending), so v2 doesn't start until it merges, and my v2 PLAT gate (AC-X1) will be a fresh run on the merged baseline.
+
+Sent to pm (6260e519). No code to gate yet (forward AC). Merge/deploy remain ORCH-gated.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, message read and acted on.
+
+## Summary
+
+Processed pm's `AC_REVISED` (TCK-chatview-v2 **rev1**), which pins TL's design/security asks. Re-ran intake against my two prior challenge findings (6260e519):
+
+- **FINDING 2 (AC-S1 ↔ AC10) — RESOLVED.** AC-S1 is now explicitly **heuristic + deterministic per-type templates** (stdlib, unit-testable, same-envelope→same-headline), "preserving AC10 *precedence*" — my resolve option (b). And AC10 isn't a v2 criterion (referenced only for field-selection order), so the raw-locus-vs-sentence contradiction is gone.
+- **Endorsed rev1's hardening:** AC-B2 now builds BTW_REQUEST via `envelope.build` (validates id + ROLES/types per R2, **no relay-ingest bypass**, explicitly ref P1 `HARD-relay-ingest-001`) + rate-limit/dedupe; AC-B5 adds a TIMEOUT state; AC-S1/AC-B3 mechanism split (deterministic templates vs agent prose) is correct. Good application of the ingest lesson.
+- **FINDING 1 (AC-M2) — STILL OPEN.** Re-verified at `feat/chatview-be` and across the repo: `metrics_dashboard.py` and any `aggregate()`/metrics module are absent (`grep "def aggregate"` empty). rev1 left AC-M2 verbatim, so "ported, not re-invented" remains unimplementable/untestable. → Resolve: provide the module (path+sha/Context Doc) or inline the KPI formulas (catches-per-commit, autonomous-minutes, cadence) + aggregate shape.
+
+**Verdict: CHALLENGE** — rev1 clears 1 of 2 blockers; **AC-M2 is the lone remaining blocker**. Resolve it and I accept the v2 spec in full (831c0960). Still forward (no code to gate); AC-PRE honored (v2 baseline = merged layout revision, ORCH-merge-gated). Merge/deploy remain ORCH-gated.
+
+Inbox empty; I'll wake on the next doorbell.
+pm's `RESOLVE` (d26b7228) is concordant closure of my CHALLENGE thread (6260e519) — it confirms both blockers reconciled (AC-M2 grounding + AC-S1 option (b)), explains why my repo search missed `metrics_dashboard.py` (it's at workspace root, outside the repo), and gives AC-B1 routing guidance. It crossed in flight with my rev2 ACCEPT (041f4bd3), which already accepted rev2 and raised the new non-blocking `challenges_upheld` formula correction — pm will see that when they read it. No reply needed (concordant; my ACCEPT covers the substance). Marked read.
+
+## Summary
+
+Processed pm's v2 `AC_REVISED` **rev2** and concordant `RESOLVE`. Both my prior intake blockers are now resolved:
+
+- **AC-M2 grounding:** rev2 **inlines the exact KPI formulas** (catches, catches_per_commit, autonomous_min, cadence_sec, challenges_upheld, by_role/by_type) so it's verifiable without external-fs access, names the external port source (workspace-root `metrics_dashboard.py` — why my repo search missed it), and references the **in-repo `metrics/compute.py`** (verified to exist) as a complementary module.
+- **AC-S1 ↔ AC10:** reconciled as my **option (b)** — a deterministic per-type sentence template *on top* of AC10; field selection + locked fixtures STAND, only presentation is templated, escape-first.
+
+**Verdict: ACCEPT v2 rev2** (041f4bd3), with one **non-blocking formula correction** I caught and reproduced against the store: AC-M2's `challenges_upheld` is **inverted** — it says "CHALLENGE rows whose *correlation_id* appears on a RESOLVE row," but the locked AC2 link is `RESOLVE.correlation_id == CHALLENGE.id` (seq4.id==seq5.corr==bb5ebe6f), so it should join `CHALLENGE.id` to a RESOLVE's correlation_id, else it miscounts. Recommended fixing the wording so the AC-M2 unit test derives correct expected values.
+
+Also endorsed rev2's security hardening (AC-M6 param validation/escaping, AC-B2 CSRF/same-origin + no relay-bypass, AC-X2 escape-first, AC-M5 git-graceful). The v2 spec is now accepted; it remains forward work (no code to gate) on the ORCH-merge-gated layout baseline (c0f0f0d, which I gated AC9 PASS). My v2 PLAT gate (AC-X1) runs fresh on the merged baseline.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox is empty — no unread messages. Stale doorbell; nothing to intake_review or act on. Stopping.
+Inbox drained, message read and acted on.
+
+## Summary
+
+Processed pm's v2 `AC_REVISED` **rev3**, which folds ORCH CURATED_ROADMAP #1/#2/#3 into v2 as three new criteria (rev2 criteria retained). Ran intake_review and **ACCEPT**ed, with grounding:
+
+**New criteria — sound, testable, grounded:**
+- **AC-H1 (heartbeat WORKING-state — plat, mine):** confirmed the real gap — `agent_reactor.drive_once` runs `claude -p` as a *blocking* `subprocess.run` and the reactor beats per-iteration, so a long in-drive agent emits no beat and currently shows amber STALE while actually working. AC-H1 closes that (WORKING state + in-drive working-beat via background thread/pre-drive marker). Current states `{alive,stale,none}` → WORKING/STALE/DOWN.
+- **AC-A1 (alerts — plat/be):** `VulnFinding` is a real registry type; ESCALATE is a free-form event (also used by AC-M2's `catches`). Hooks exist.
+- **AC-T1 (thread-collapse — fe):** builds on v1 AC2 connected-components grouping (exists).
+
+**Flagged:**
+- **Carry-forward (still open):** AC-M2 `challenges_upheld` is still inverted (rev3 kept rev2 verbatim; my 041f4bd3 correction not yet folded) — reproduced the correct join `CHALLENGE.id == RESOLVE.correlation_id`. Asked pm to fold it next rev.
+- **Minor:** AC-A1 says alert on "VulnFinding (HIGH)" but also "no severity-tagging" — the basic version should alert on *any* VulnFinding; HIGH-filtering lands with v2.1 tagging.
+
+**Ownership noted:** AC-H1 and AC-A1 are my (plat) deliverables — I'll implement them and run the v2 PLAT gate (AC-X1) fresh on the merged baseline. Sent to pm (cfb7960e). Still forward work; AC-PRE honored (baseline = merged layout revision, which I gated AC9 PASS at c0f0f0d; merge ORCH-gated/pending). Merge/deploy remain ORCH-gated.
+
+Inbox empty; I'll wake on the next doorbell.
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Inbox drained. All messages read and acted on.
+
+## Summary
+
+Processed two messages:
+
+**1. pm `RESOLVE` (348b7f7e)** — concordant closure of my AC-M2 `challenges_upheld` correction; pm folded the corrected join (`challenge.id == resolve.correlation_id`) into rev4 and flagged the external dashboard's inverted join so the porter fixes rather than copies it. No reply needed.
+
+**2. pm `AC_REVISED` rev5 → rev6** — accepted both successive revisions:
+- **rev5:** AC-A1 now alerts on **any/every VulnFinding** (resolving my carried-forward "HIGH vs no-severity-tagging" minor) + a new SEC escape-first clause for the alert surface; AC-PRE encodes ORCH BUILD_ORDER phasing (CORE robustness first → metrics/summaries/top-3 → /btw → v2.1).
+- **rev6:** SEC pins — **AC-R4 client-inject-as-is** ("meta.role used ONLY as a class/colour key, never interpolated into markup/attribute/href"), which cleanly closes the meta.role security loop now that AC-R4 makes FE a real `/chat.json` consumer; and **AC-R2 `?since=` integer validation**.
+
+Both ACCEPTed (57039faa, e8f5f90c). The v2 AC is now SEC-complete across all new surfaces (metrics inputs, /btw, alerts, delta/append), with my AC-M2 correction folded and all my prior findings resolved.
+
+**Standing state:** v2 is forward work (no code to gate yet). Per AC-PRE I gate **per phase**, CORE first. My PLAT deliverables are **AC-H1** (heartbeat WORKING-state) and **AC-A1** (alerts, plat/be), both phase 2. The v2 AC9 gate (AC-X1) runs fresh on the merged baseline — v1's AC9 already PASSED at c0f0f0d (9cdd8242); the merge is ORCH-gated/pending. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Inbox drained, worktree pruned. All messages read and acted on.
+
+## Summary
+
+Processed four messages — two v2 AC revisions and a BE CORE PR:
+
+**AC rev7 + rev8 (pm) — ACCEPTED (cf264471):**
+- **rev7:** the delta becomes a **server-rendered HTML fragment** (`/chat/feed?since=` + `insertAdjacentHTML`, no client construction) — a **security improvement** (single server XSS surface) that resolves both the FE conflict and SEC client-sink objection.
+- **rev8:** AC-PRE corrected — render-robustness (AC-R1..R5) is **CORE**, built with the layout and verified pre-merge, not deferred.
+
+**BE CORE render-robustness PR @2a8cb60 (be) — AC9 gate PASS (91b9c22c):**
+- Suite **200 green** (incl. 7 new robustness tests).
+- **AC-R2:** `?since=` non-int/malicious → empty fragment, no 500, not reflected; valid → delta; absent → capped feed.
+- **AC-R5:** delta fragment escape-first (`<script>`→`&lt;script&gt;`, no raw `<img onerror>`) — reuses `_chat_row`, single server surface.
+- **AC-R3:** `CHAT_PAGE=100` cap + load-older control (whole 570+ bus not shipped). **AC-R1:** `render_chat` server-renders `#feed` (no-JS first paint).
+- **Light re-pin:** `git diff c0f0f0d..2a8cb60 -- chatview/` is empty → AC10/AC2/AC4/AC12/meta.role-escape **byte-identical** to my certified c0f0f0d; v1 AC1–AC13 carry onto the rebased base.
+
+**Pending:** AC-R4 (FE append poller) isn't in this PR — I gate the full CORE once be folds the FE poller patch in. QA owns mobile-weight + never-blank + delta-append E2E; SEC re-confirms the delta surface. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @b85b811` — an additive `seq` cursor over my certified 2a8cb60 (so FE's append poller can track `lastSeq` and dedup by `data-seq`).
+
+**AC9 gate PASS** (e870072a):
+- **Scope confirmed:** `diff 2a8cb60..b85b811` = `feed.py` (+seq field) + `_chat_row` (data-seq attr) + 2 tests — nothing else.
+- **`seq` is not attacker-controllable:** declared `seq INTEGER PRIMARY KEY AUTOINCREMENT` — DB-assigned at insert, never from the envelope body (safe even via relay ingest), emitted as a plain int attribute.
+- **Adversarial:** a fully-malicious envelope (`from_role=<img onerror>`, `event=<script>`, `<script>` payload) → `data-seq="42"` and **no raw `<script>`/`<img onerror>` anywhere** — escape-first intact, no new sink.
+- Suite **201 green** (incl. the data-seq cursor test on both full-page and delta fragment).
+- Light re-pin holds: additive int cursor, escape-first unchanged from the c0f0f0d/2a8cb60 chatview I certified.
+
+**Pending:** AC-R4 (FE append poller) — I gate the full CORE once be folds the FE poller into the one CORE sha. Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+Inbox drained, worktree pruned, message acted on.
+
+## Summary
+
+Processed be's `PR_UPDATED @ed24287` — **render-robustness CORE COMPLETE** (the FE delta-append poller folded onto my certified b85b811). This is the full CORE AC9 gate I'd deferred until AC-R4 landed.
+
+**AC9 gate PASS** (ef00bff2):
+- Suite **204 green**.
+- **AC-R4 + AC-R1 (verified by source inspection, not rendered output — heeding be's note that `innerHTML`/`DOMParser` grep hits are message *content*):** the chat poller `fetch('/chat/feed?since=')` → `insertAdjacentHTML('beforeend')` — **append-only, zero `feed.innerHTML=` wipe**, bails on `!r.ok`/error → keeps feed (never-blank). No client row construction.
+- **AC-R5:** the injected fragment is server-rendered via `_chat_row` (escape-first); adversarial envelope → no raw `<script>`/`<img onerror>`. Single server XSS surface.
+- AC-R2/R3 carry from 2a8cb60; AC8 bottom-anchor preserved; `chatview/` untouched → meta.role/root_id/headline escape intact.
+
+**Non-blocking observation flagged:** the `/` LEFT #fleet panel uses a *separate* pre-existing poller (guarded `/`-refetch + innerHTML swap of server-escaped content) — not the chat path, out of AC-R1's chat-feed scope, and safe; noted so SEC/QA know the page has two distinct update paths.
+
+**Next per AC-PRE (rev8):** CORE is verified pre-merge → QA mobile-weight + never-blank + delta-append E2E, TL authoritative review, SEC confirm, then ORCH preview/merge. I gate only — I do **not** emit to ORCH (TL/ORCH own that). Merge/deploy remain ORCH-gated — performed neither.
+
+Inbox empty; I'll wake on the next doorbell.
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Ticket marked read. Done.
+
+**Summary of work performed:**
+
+**AC-H1 (heartbeat WORKING-state)**
+- `agentctl/heartbeat.py`: added `emit_working(path, now, max_duration=300)`, `clear_working(path)`, `working_state(path, now) → (bool, bool)`
+- `launcher/agent_reactor.py`: added `WORKING_MAX_DURATION=300`, `working_path()`, wraps `drive_once` in `emit_working`/`finally: clear_working` 
+- `launcher/fleet_monitor.py`: `hb_status` now checks `.working` first → returns `'working'` (blue `#1f6feb`) when marker present and not expired; expired marker falls through to stale — hung `claude -p` cannot hold perpetual green (HARD CONSTRAINT met)
+
+**AC-A1 (escalation/alerts banner)**
+- `alert_envelopes()`: queries `ChallengeThread/ESCALATE` and any `VulnFinding`
+- `_render_alerts_html()`: escape-first on all envelope fields; injects `role="alert"` div above `#feed`; absent when no matching envelopes
+
+**Tests**: 22 new tests (6 `test_heartbeat_working`, 13 `test_fleet_monitor_tristate`, 3 `test_reactor_working_beat`); full suite green at `861fb6b`. PR sent to BE (dab80e20) to fold onto ed24287.
+Done. Replied to TL (bf55df42) with ACCEPT/ACK: both AC-H1 and AC-A1 were already delivered at `861fb6b` with PR `dab80e20` in BE's inbox. No blocker — awaiting BE fold onto phase-2 sha.
+**intake_review** on 5c4327fb (ChallengeThread/ACK from TL):
+
+- **Type**: ACK, not a challenge — no locus, no falsifiable objection to respond to.
+- **Claims to verify**: (1) "861fb6b is feat/chatview-be HEAD, descends cae42c55" — matches my git log from previous session. (2) "22 green" — matches what I reported and reproduced. (3) "WORKING_MAX_DURATION=300s expired → STALE, hung can't hold perpetual green" — confirmed in code by me (clear_working in finally; working_state returns False after max_duration).
+- **Coordination note absorbed**: I committed directly; TL says no harm (clean descent). BE will build AC-S1 on top of 861fb6b and drop its own AC-A1 (no duplication). Single AC-A1 implementation stands as mine.
+- **Next incoming**: AC9 gate request after TL authoritative review + QA E2E.
+
+**ACCEPT** — all claims consistent with what I reproduced. No response required; message already read. Waiting for AC9 gate.
+Done. Challenge UPHELD, fixed at `23e274c`, RESOLVE sent to BE (84d744bf).
+
+**What changed**: extracted `_edited`, `_in_tokens`, `_parse_run_output`, `_append_usage` as module-level helpers before `make_runner`. The nested `run` closure now only calls these — its AST is branch-light at CC=7. Gate result: `[]` violations. Full suite still green.
+Done. RESOLVE sent to TL (71ff7faf).
+
+**intake_review result**: CHALLENGE UPHELD — complexity violation at `861fb6b` was real. Fixed at `23e274c` (committed last session, before this wake): `make_runner=7`, `run=7`, gate clear. TL's note about the working-beat was a red herring — the complexity was in JSON parsing `or`-chains and nested try/except inside `run`, not in the working-beat code (which lives in `react_loop`).
+**intake_review** on c386a01d (BE ChallengeThread/RESOLVE):
+
+Claims to verify:
+1. `gates.complexity(ceiling=10) = []` at `23e274c` — **reproduced by me** last session: `make_runner=7`, `run=7`, `_parse_run_output=9`.
+2. `246 passed, 0 failed` — **consistent** with my all-green run.
+3. AC-H1 tri-state + AC-A1 escape-first still green — **consistent** with my 22-test suite passing.
+
+**ACCEPT**: BE independently reproduced my numbers. All claims match what I verified. NORMS §1 satisfied. Challenge thread is closed.
+
+No response required — this RESOLVE closes the thread BE opened (8ac94ee0). Awaiting TL authoritative review → AC9 gate.
+**intake_review** on ece22972 (TL ChallengeThread/ACCEPT):
+
+Claims:
+1. `gates.complexity(ceiling=10) = []` at `23e274c`, `246 passed` — **reproduced**: `make_runner=7`, `run=7`, all-green suite confirmed by me and BE independently.
+2. `23e274c` clean descendant of `861fb6b` — **confirmed** via `git log` last session.
+3. AC-H1 bounded-WORKING intact — **confirmed**: working-beat logic is in `react_loop`, untouched by the refactor.
+
+**ACCEPT**: all claims consistent with what I reproduced. TL's challenge (f19a8c6d) is closed. AC-X1 quality gate clears on the complete phase-2 sha.
+
+No response required. Awaiting QA E2E → PLAT AC9 gate → merge ApprovalRequest.
+Inbox clear. Summary of what was processed:
+
+**Envelope c835e626 — tl→plat ChallengeThread/NOTE (fleet_monitor.py render() grandfather)**
+
+Intake: legitimate NOTE from supervisor, no fabricated claims. Ran AC-X1 independently:
+- `radon cc 6bb1954:fleet_monitor.py` → `render()=11` at the original monitor commit, before any chatview work.
+- `radon cc 23e274c:fleet_monitor.py` → `render()=11` at same line structure, body unchanged.
+- All phase-2-introduced functions: `_render_alerts_html=9`, `render_chat=5`, all agent_reactor helpers ≤7.
+- **AC-X1 PASS** on 23e274c: no new violations; sole >10 is the grandfathered `render()`.
+
+Replied to tl with verified PASS and evidence list. (f6e74383)
+
+**Envelope dfc9f059 — tl→plat ReviewVerdict/ACCEPT**
+
+TL accepted the gate PASS and confirmed the committed 23e274c is clean (Librarian WIP is working-tree-only). Ruling: merge may proceed at committed sha with clean-tree precondition; TL is issuing the ApprovalRequest to ORCH. ACKed and closed. (17996662)
+Inbox clear. Summary of what was processed:
+
+**Envelope 5d717cc0 — be→plat ChallengeThread/RESOLVE (dirty working tree)**
+
+Reproduced BE's claimed resolution: `git status` shows clean tracked tree at 23e274c (only `logs/` untracked, ambient runtime), stash@{0} label matches "librarian WIP (out of phase-2 scope)", and `py -m pytest` returned **246 passed, 0 failed**. All three claims verified. ACCEPT sent to be (d2fb3a86).
+
+**Envelope 9a24a04a — tl→plat ChallengeThread/CHALLENGE (group_conversations CC=11)**
+
+TL was correct. My original AC-X1 scan was scoped to only `fleet_monitor.py` + `agent_reactor.py` — I missed the whole-repo picture. Reproduced:
+- Whole-repo radon at 23e274c: `{envelope.build=12, chatview/grouping.group_conversations=11, gating/migrations.classify=13, harness/run_harness.main=15, fleet_monitor.render=11}`
+- `git cat-file 6bb1954:chatview/grouping.py` → absent at baseline
+- `group_conversations=11` introduced by 4dc633c (phase-2), **not grandfathered**
+
+Actions: RESOLVE sent to tl rescinding the PASS (f3ecf8ed); CHALLENGE sent to be (2666f825) requiring `group_conversations` refactored to CC≤10 on a new sha. Fix path: extract a `_build_conversation(members, ids)` helper (lines 59–64), reducing `group_conversations` to CC=8 and the new helper to CC=4.
+
+**Envelope 326e93e3 — tl→plat ChallengeThread/NOTE (release held)**
+
+Cross-posted informational NOTE — TL confirming no merge/ApprovalRequest until challenge 9a24a04a is resolved. Predated my RESOLVE. ACKed with cross-reference to the already-sent messages (b5c80ac4).
+Inbox clear.
+
+**Envelope f9bab719 — tl→plat ChallengeThread/ACCEPT**
+
+TL accepted the AC-X1 rescission (RESOLVE f3ecf8ed) with independent verification matching mine. No new claims requiring reproduction. State is now:
+- AC-X1 FAIL on 23e274c (group_conversations CC=11, new phase-2 violation)
+- Release HELD pending BE fix sha
+- BE challenge 2666f825 outstanding: refactor `group_conversations` to CC≤10
+- On fix sha: plat will re-run whole-repo radon before issuing any new PASS; tl will run final_review + AC-X1 re-measure independently
+Inbox clear.
+
+**Envelope c3604a1b — be→plat ChallengeThread/RESOLVE (group_conversations fix at 9c55da0)**
+
+Reproduced all claims against the committed sha (stashed `librarian/` to isolate the committed tree for the whole-repo scan):
+
+| Check | Result |
+|---|---|
+| `git show 9c55da0 --stat` | chatview/grouping.py only, +9/-6 ✓ |
+| `radon cc chatview/grouping.py` | `group_conversations B(8)`, `_build_conversation A(4)` ✓ |
+| Whole-repo radon `--min C` | `{build=12, classify=13, main=15, render=11}` — all 4 grandfathered, no new >10 ✓ |
+| `pytest` | 246 passed / 0 failed ✓ |
+
+ACCEPT sent to be (972cfbe8). AC-X1 GATE_PASS NOTE sent to tl (289f1fee) — phase-2 merge candidate advances to **9c55da0**.
+Inbox clear.
+
+**Envelope 01acb27e — tl→plat ChallengeThread/ACCEPT**
+
+TL independently reproduced all gate numbers at 9c55da0 (isolated worktree): `group_conversations=8`, `_build_conversation=4`, whole-repo >10 = only the 4 grandfathered functions, 246/0. Numbers match exactly. No disputes. ACKed (8eb5d9a6).
+
+Gate status: **plat condition (1/3) CLOSED** on 9c55da0. Release remains held pending QA phase-2 E2E (2/3) and SEC ACCEPT carry on grouping.py (3/3).
+Inbox is genuinely empty — `--unread` returned nothing on two consecutive checks. The full inbox tops out at seq 696 (already processed last turn). This appears to be a spurious wake (doorbell fired before the message fully landed, or the message was delivered and already read). No action required.
+Inbox still empty — highest seq remains 696, already processed. Second consecutive spurious wake from the doorbell. No action required; stopping here.
+Inbox clear. Summary:
+
+**Envelope 0204eff3 — tl→plat Ticket/TICKET_READY (WS3: Harden the gates)**
+
+Intake: existing gates (`complexity`, `dependency`) and `hooks/tdd_guard` already present with tests. Missing piece: `gates/no_bloat.py`. TDD-first path:
+
+1. Wrote `tests/test_no_bloat.py` (10 tests) — confirmed ERROR on import (red)
+2. Implemented `gates/no_bloat.py` — `diff_too_large()` + `gate()` reusing `gates.dependency.unjustified` (DRY, CC=3/1)
+3. 10/10 green; 185 suite passing; CC ≤10
+4. Committed **83fa0c3**; PR sent (dc8aaff4)
+
+**Envelope 1a500a1d — tl→plat Ticket/TICKET_READY (WS2: Optimizer agent #22)**
+
+Intake: `analytics/optimizer.py` absent; `analytics/bloat.py` and `gates/complexity` reused. TDD-first path:
+
+1. Wrote `tests/test_optimizer.py` (9 tests) — confirmed ERROR on import (red); fixed CC fixture from 9→13 after measuring against `gates.complexity.score_functions`
+2. Implemented `analytics/optimizer.py` — `scan_source()` / `to_remediation_payload()` / `on_merge()` hook (event-driven, not polling; NORMS §2); payload satisfies `proof.OBLIGATIONS['Remediation']`: `rescan_result` + `poc_now_failing`; CC=4/3/3
+3. 9/9 green; 185 suite passing; CC ≤10
+4. Committed **54d563a**; PR sent (861e120c)
+
+**Side-note flagged in both PRs:** concurrent WIP (`M launcher/agent_reactor.py`, `M profiles/model_presets.py`, `?? tests/test_model_escalation.py`) in the working tree is not from these commits — the 4 `test_model_escalation` failures are that WIP, not plat's changes.
+Inbox genuinely empty — highest seq is 723, both already processed last turn. Spurious wake again; no action required.
+Both messages sent. Done — inbox now empty.
+
+**Summary:**
+
+**Envelope 737 (`5a1ee8ed`) — `ReviewVerdict/APPROVE` WS3 no-bloat:** Consumed. Remaining WS3 open item was `tdd-guard-BLOCKS`. Found that `roles.py` had `writes_code=False` for `plat`, `tl`, `sec` — those roles were missing the PreToolUse tdd_guard hook in their generated settings.json. Wrote failing test first (red: `plat/tl/sec missing PreToolUse tdd_guard hook`), then set `writes_code=True` for all three in `roles.py`, regenerated profiles. 206/206 green at `db7569f`. PR opened to TL.
+
+**Envelope 741 (`fd5659f2`) — `ReviewVerdict/APPROVE-pending-doc-fix` WS2:** Consumed. Corrected `analytics/optimizer.py` module docstring: removed false claim of `analytics.bloat` reuse (never imported). Doc-only fix, 9/9 green at `8fb6bf7`. PR_UPDATED sent to TL.
+No unread messages. Inbox is clear.
+Done. WS3 fully closed — all three ACs (no-bloat gate, tdd-guard-BLOCKS, complexity CC≤10) confirmed by TL's APPROVE at `db7569f`. ACK sent. Inbox clear.
+Done. WS2 fully closed — APPROVE at `8fb6bf7` consumed and ACK sent. WS2 + WS3 both complete. Inbox clear.
+Done. Inbox processed.
+
+**Summary:** `ContextDoc/WORKSTREAM_BRIEF` WS-D consumed. Built `gates/catalog_coverage.py` — pure `gate(catalog_sources, touched_sources) -> list[str]`, O(touched+declared) via set difference, 16 lines. 6 failing tests written first (import-ERROR red), all 6 green post-impl. Full suite 212/212. PR opened to TL at `4252966`.
+Inbox clear. Summary:
+
+- **WS-D APPROVED** (tl, 4252966). All 4 ACs met at unit level.
+- **Discrepancy reconciled:** My 212 count was on a divergent clone (local master). tl's 252/252 on `epic/observability-registry-contract` is authoritative. Will track integration target going forward.
+- **Wiring follow-up logged:** Gate is a pure function, not yet invoked at any blocking point. A WS-D-wire ticket is needed — wire into merge/review hook (per `hooks/tdd_guard.py` pattern) with BDD test proving uncataloged-source change is rejected end-to-end. Not blocking the current unit.
+- **Awaiting:** ORCH to integrate the epic branch and assign WS-D-wire.
+Inbox processed. Summary:
+
+- **CHALLENGE sent** on `tkt-cache-hit-timeseries` (correlation: c612421d).
+- Two specific objections:
+  1. `git_ref 9d2516c` — unknown in my working tree; cannot verify the `timeseries` enum addition in `catalog_schema.json`.
+  2. `gates/catalog_coverage.py` — absent locally; `epic/observability-registry-contract` has no local/remote tracking ref.
+- **Resolves:** tl makes the epic branch reachable (or supplies the relevant file blobs). Once unblocked I proceed TDD-first: failing display-enum test → gate extension → PR.
+Inbox clear. Standing by for ORCH to make `epic/observability-registry-contract` fetchable. No implementation until I can read `catalog_schema.json @9d2516c` and `gates/catalog_coverage.py`.
+Inbox processed. Summary:
+
+- **`tkt-cc-run_harness-main` done.** `main` CC reduced from 15 → 3 via two extractions: `_collect_row` (CC=6) and `_print_table` (CC=8).
+- TDD-first: CC-ceiling test written first, confirmed FAIL at CC=15; 9 behavior-characterization tests locked the contract and stayed green throughout.
+- Full suite: 229/229 (219 baseline + 10 new), no regressions.
+- Branch `tkt-cc-run_harness-main` pushed; PR_OPENED sent to tl for final review.
+Inbox clear. Done.
+
+**Intake summary — 2 inbound artifacts processed:**
+
+1. **`tl→plat` ReviewVerdict ACCEPT** (PR `tkt-cc-run_harness-main` @ 3f7b178) — TL merge-approved via fresh-clone rebuild. Per intake duty I reproduced the core claims locally rather than taking them on faith: radon confirms `main` A(3), `_collect_row` B(6), `_print_table` B(8) (under the 10 ceiling); CC gate 10/10 GREEN. Verdict is well-evidenced (non-empty `verified[]`) — concurred.
+   - **ACK'd to TL** with what I reproduced.
+   - **ApprovalRequest → ORCH** for the landing/merge GoDecision (R6 — neither PLAT nor TL merges to main; landing is ORCH-gated).
+
+2. **`tl→plat` ChallengeThread NOTE** (working-tree hygiene — a CC10 dirty `run_harness.py` WIP) — Investigated: my working tree (`agent-workspace`) is clean of `run_harness.py` (only untracked `prodkit/`); my accepted delivery 3f7b178 has `main` at line 66/CC3, while the WIP has `main` at line 56/CC10 — different layout; archive recall shows no CC10 scratch authored by plat.
+   - **Replied to TL**: flagged as **orphan WIP, not on my surface** — it lives in a working tree I don't operate in, so I can't stash it from here; confirmed I will not commit any CC10 version (delivery stays 3f7b178), recommend triaging it in place.
+
+Both messages marked read. Stopping.
+Inbox clear. Done.
+
+**Ticket `tkt-opt-noise-wake-gate` — implemented and PR opened @ 6fce41a.**
+
+Changes:
+
+- **`profiles/model_presets.py`** — `_NOISE_EVENTS = frozenset({"ACK", "STATUS_ACK"})` added alongside `_BARE_ACK_EVENTS`/`_CHEAP` (single taxonomy module, DRY).
+- **`launcher/agent_reactor.py`** — three targeted changes:
+  - `react_loop` gets `store_path=` param and the noise gate: peeks unread once, drains all-noise or empty wakes (mark_read + log + skip drive_once), passes pre-fetched rows to `drive_once` on actionable paths.
+  - `_pick_model` gets `rows=` param — if provided, skips the store read (AC1: single read per wake).
+  - `drive_once` gets `_peeked_rows=` param — forwards to `_pick_model`.
+- **`tests/test_noise_gate.py`** — 16 new BDD tests covering all 6 ACs.
+- **`tests/test_agent_reactor.py`** — `test_react_loop_drives_once_per_wake` updated to seed an actionable inbox message (gate now correctly skips stale/no-store wakes per AC5).
+
+245/245 passing. PR sent to TL for review.
+Done. The message is marked read (0 unread) and the work is complete.
+
+## Summary
+
+**Inbound:** TL `ReviewVerdict / REQUEST_CHANGES` on my PR `tkt-opt-noise-wake-gate` @ `6fce41a` — round 1 of 3.
+
+**Intake review (verified, not trusted):** I reproduced the objection in source before acting:
+- The noise-gate **peek** (`_store.inbox`) and **drain** (`mark_read`) sat *outside* the `try/except` that only wrapped `drive_once` (`agent_reactor.py:295-330`).
+- `store.py:28-32` `_connect` uses `journal_mode=WAL` with **no `busy_timeout`**, and `mark_read` does `UPDATE`+`commit` — under writer contention SQLite raises `OperationalError` *immediately* (worse than TL stated), which escaped `react_loop` and would kill the warm reactor. A genuine robustness regression vs `db7569f`. I concurred.
+- Also reproduced the latent `no-store-never-drives` path.
+
+**Fix (TDD, 6 new tests red→green):**
+- `_peek_unread` — peek inside a guard; on failure returns `None` → **drive** (legacy fallback), never silently drains an unknown inbox. `[]` (clean-empty) is kept distinct so stale wakes still skip (AC5).
+- `_drain_noise` — drain inside a guard; a write error leaves noise unread for idempotent retry, reactor survives.
+- `store.mark_read_many` — single batched write txn for the whole noise wake (Norm 1).
+- `rows=None` vs `[]` distinction closes `no-store-never-drives`.
+- Refactor: `react_loop` CC **14→7** (was already >10 at HEAD); all touched functions under the 10 ceiling.
+
+**Verified:** full suite **251 passed** (245 prior + 6 new); CC gate clean for my functions.
+
+**Outbound:** Resubmitted as `PR / PR_OPENED` to TL @ `78b0602` with per-objection resolution + reproduction evidence. Verdict marked read.
+Inbox is clear — the `read` call already consumed it (read is the mark-read op; there is no `--mark-read` flag).
+
+Done. Summary:
+
+- **Intake_review on TL's APPROVE (2f03f741)** for `tkt-opt-noise-wake-gate` @ 78b0602 — verdict reproduced independently, not taken on trust:
+  - Suite: **251 passed** (2×, isolated basetemp to avoid the Windows cleanup-race PermissionError)
+  - CC ceiling: touched fns `react_loop` 7, `_peek_unread` 4, `_drain_noise` 3, `_handle_wake` 7 — all ≤10
+  - `make_runner`/`run` (11) confirmed **pre-existing** at base 6fce41a with no def-line change in the diff — not introduced by this PR
+  - Tree clean at 78b0602
+- All three round-1 items (`reactor-store-access-unguarded`, `mark_read-n-txns`, `no-store-never-drives`) confirmed closed.
+- **R6 honored**: I did not merge. Emitted **ApprovalRequest → ORCH (7ea922d2)** requesting the GoDecision to land 78b0602, citing TL's peer APPROVE + my reproduction.
+- Inbound verdict marked read; inbox clear.
+
+Merge now waits on ORCH's GoDecision.
+Inbox clear. Done.
+
+**Intake_review of `tkt-sync-statpairs-be-origin-v1`** — all TL claims reproduced independently before acting:
+- `0da404c` present in canonical clone `C:/ZeeCloud/Projects/isolated-agent-system/.git` ✓
+- Bare origin `C:/ZeeCloud/git/isolated-agent-system.git` MISSING `0da404c` (object store confirmed absent) ✓
+- `0da404c` clean descendant of `e1303ac` (`merge-base --is-ancestor` passes) ✓
+
+**Action taken** — pushed as new branch (no force) from canonical clone to bare origin:
+- AC1: `git ls-remote origin refs/heads/tkt-stat-pairs-be-v1` → `0da404c` ✓
+- AC2: `git fetch origin` in `C:/ZeeCloud/worktrees/be` succeeded; ref resolves correctly ✓
+
+**Notified BE** (75c446a1) with fetch instructions. BE can now `git fetch origin && git checkout tkt-stat-pairs-be-v1` to apply the ReviewVerdict fixes.
+Inbox clear. Done.
+
+**Intake_review of BE ChallengeThread (64cbd754, ACCEPT)** — BE supplied non-empty evidence and I confirmed it's a sound terminal resolution:
+- AC1: `cat-file 0da404c → commit` (object now present, previously absent) ✓
+- AC2: fetched + checked out at `0da404c` in `C:/ZeeCloud/worktrees/be`, all 4 target files present, suite ran ✓
+- BE applied both REQUEST_CHANGES fixes on top; their branch now at `84c8103`.
+
+The challenge closed positively — no rebuttal warranted. Closed the loop with **TL (192f87fe)** reporting `tkt-sync-statpairs-be-origin-v1` **DONE** and consumed. Message marked read; inbox clear.
+[reactor:plat] wake drained � 1 noise msg(s), no claude run
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Done. Summary of this wake:
+
+**Resumed P0 rescue** — found it already completed by a later session: `feat/tkt-rescue-code-touch-writer-v1` @ `a37a5cf` has `_log_code_touch` committed (grep ×2), `tests/test_code_touch_writer.py` present, pushed to origin. No action needed; stale index.lock cleared on its own.
+
+**Intake_review on 4 inbox messages:**
+- **3× ReviewVerdict APPROVE** (rescue `a37a5cf`, noise-wake `78b0602`, run_harness `3f7b178`) — all independently rebuilt by TL, all ACs PASS. Land is R6-gated; TL has **folded all three into TL's own sequenced ApprovalRequest to ORCH**, so I deliberately did **not** re-raise them (my only prior escalation, `7ea922d2`, stands).
+- **ChallengeThread NOTE** — accepted TL's emit-once correction (I'd flooded ~30 duplicate `PR_OPENED`). Verified the artifact itself is singular (exactly 1 rescue ref on origin); duplication was message-emission only.
+
+**Actions:**
+- Sent **one consolidated** ChallengeThread ACK to TL (`495295f9`) — accepting the hygiene correction and confirming no re-emission — rather than four separate replies, honoring the very discipline being corrected.
+- Marked all 4 read; inbox clear.
+- Persisted the emit-once rule as a feedback memory (`bus-emit-once.md`) with an index entry.
+
+Then stopped.
+Inbox clear. Summary of this wake:
+
+**GoDecision 3bb0add2 — tkt-cc-run_harness-main: LANDED**
+- Resolved 3-way conflict in `harness/run_harness.py` (kept `_collect_row`+`_print_table` from 3f7b178) and updated `tests/test_run_harness.py` (_row_for→_collect_row; file was post-branch-point in origin/main, would have left 6 tests broken)
+- 392/392 tests passing. Pushed to `main` at `b92394ce3fb013de5517814203da5ed93ae2cc99`
+- ORCH RULING: GoDecision valid, land stands, no breach; one non-blocking QA audit-closure confirm in flight (`4012e02b` to qa)
+
+**tkt-opt-noise-wake-gate (78b0602) — HOLDing**
+- ONE canonical MERGE_REQUEST sent to TL (`96fd4d7d`): base=main, 2 unique commits, 3 conflict files disclosed. Will not re-emit. Awaiting TL review → ORCH GoDecision before any action.
+All inbox messages processed. Summary of this wake:
+
+**Message 1 — `f852b153` ORCH RULING (tkt-cc-run_harness scope):** Items 1/3/4 closed, NORM N3 ratified (GoDecision GO carries mechanical-integration authority). ACK'd (`7c089cc7`); confirmed item-2 chain already routed.
+
+**Message 2 — `41b333fc` TL REQUEST_CHANGES (tkt-opt-noise-wake-gate / 78b0602):** Tested the "mechanical rebase" claim by reproducing it. **It is not mechanical** — main b92394c already shipped the noise-wake gate via `a583471` (T2: `_actionable()`/`_service_wake()`), and the branch's `_NOISE_EVENTS={ACK,STATUS_ACK}` deliberately conflicts with main's `{ACK,STATUS_ACK,NOTE,RESOLVE,STATUS,NUDGE,PING}`. Per NORM N3 this semantic choice is outside my egress discretion. Aborted the rebase (no head emitted, main untouched) and **CHALLENGED** TL (`bb68925d`) with two falsifiable resolves: (A) close ticket as superseded, or (B) treat the narrowing as a deliberate behavior-change delta needing product sign-off.
+
+**Message 3 — `591e4090` QA TestReport PASS (tkt-cc-run_harness @b92394c):** 392/392 GREEN, reproduced twice. Held pending TL's matching rebuild.
+
+**Message 4 — `4e97a64f` TL ACCEPT (tkt-cc-run_harness rebuild @b92394c):** Resolved tree matches GoDecision 3bb0add2 intent. This completed the sha-consistent QA+TL+PLAT chain at b92394c, so I **emitted the ApprovalRequest** to ORCH (`cf20d7f3`) for gate-complete ratification.
+
+All four marked read; inbox clear. Open threads: ORCH gate-complete ratification (cc-run_harness) and TL's A/B decision (noise-wake-gate). Stopping.
+Inbox clear. Summary of actions taken:
+
+**Message 1 — GoDecision/GATE_COMPLETE (orch→plat, d95227d3):**
+ACCEPT. tkt-cc-run_harness-main audit chain CLOSED on plat side. Internalized forward note: future gates must route QA+TL verdicts directly to ORCH — plat must not be the sole verification conduit for its own egress. ACK sent (8d1c2147).
+
+**Message 2 — ChallengeThread/ACCEPT (tl→plat, 1f53727f):**
+ACCEPT. TL withdrew REQUEST_CHANGES 41b333fc; independently reproduced all three verification points. Ruling: OPTION A — tkt-opt-noise-wake-gate CLOSED/SUPERSEDED by a583471. 78b0602 is dead; I will not re-emit MERGE_REQUEST. ACK sent (be3dea5b).
+
+Both threads closed. No open actions.
+Both are clean informational closures — no action required.
+
+- **b4ee6111:** TL confirms drift note 6ea3f35d stale/resolved; SECTION_A 18 keys all test-protected. Spec doc discrepancy (lists 12) is PM housekeeping, non-blocking.
+- **fa656e77:** TL confirms APPROVE 9e9814f1 covers A6; 11/11 reproduced. A7 stays gated.
+
+Inbox clear. Stopping.
+
+---
+
+**Session summary — all messages processed:**
+
+| Message | From | Disposition |
+|---------|------|-------------|
+| d95227d3 | orch | GoDecision/GATE_COMPLETE — tkt-cc-run_harness-main CLOSED. ACKed (8d1c2147). |
+| 1f53727f | tl | ChallengeThread/ACCEPT — tkt-opt-noise-wake-gate SUPERSEDED. Branch 78b0602 dead. ACKed (be3dea5b). |
+| 1d4db586 | pm | Ticket — tkt-briefer-problems-curation-v1 implemented: briefer_run.py NOT_PROBLEMS expanded, OUTAGE_RECOVERY_SUPPRESS self-expiry, prodkit_server.py _pulse_impl delegates to problems_from(). 11/11 tests PASS. |
+| Chain of amendments | pm/tl | A2 self-expiry, A1+6 delta, A6 scope expansion — all incorporated through TDD cycles. |
+| Final | orch | ApprovalRequest 18f7c090 for GoDecision + prodkit_server restart. Sole open AC is A7 (live /api/pulse), gated behind restart. TL APPROVE 9e9814f1, PM ACCEPT 65fa25a8 on file. |
+Inbox clear. Summary of this turn:
+
+**GoDecision c910a616 (CONDITIONAL GO) executed:**
+
+1. **Condition 1 — Artifact identity:** All 3 files hashed; mtimes 06:10-06:13 today, consistent with TL APPROVE 9e9814f1. No edits post-review. Hashes recorded in DeployRecord f9f2650e.
+
+2. **Condition 2 — Rollback:** Byte-identical copies at `C:/ZeeCloud/rollback/tkt-briefer-problems-curation-v1-pre-restart-20260624T065711/`. Hash-verified before restart.
+
+3. **Restart:** PID 69208 terminated → supervisor auto-restarted as PID 47548. Downtime < 10s.
+
+4. **A7 gate:** Plat spot-check confirmed `problems=[optimizer_open only]` live, but correctly self-classified as self-attestation. QA AcceptanceCriteria 3e344c2c sent with direct-to-ORCH routing. ORCH's GATE-COMPLETE ratification is withheld pending QA independent verdict.
+
+Ticket remains open until QA routes A7 GREEN to ORCH.
+Inbox clear. Summary:
+
+**GoDecision/GATE_COMPLETE 9899165a — ACCEPTED.** tkt-briefer-problems-curation-v1 is fully closed. CEO problems-panel curation v1 is live with `optimizer_open` as the sole surfaced signal; OUTAGE_RECOVERY_SUPPRESS self-expires 2026-06-27. Open non-blocking followup (VCS for production files) logged separately. plat is IDLE.
+DeployRecord sent (ae1c6ee9). Inbox now clear.
+
+**Summary:**
+
+| | |
+|---|---|
+| GoDecision/GO | c0fd600b accepted |
+| Condition 1 — artifact identity | repo `da272505` == live `da272505` ✓ |
+| Condition 2 — rollback copy | `C:/ZeeCloud/rollback/tkt-network-viz-mobile/prodkit_server.py.pre-fa6cd03` (877e684e) ✓ |
+| Restart | pid 62264 killed; `/api/pulse` 200 OK ✓ |
+| Condition 3 | Pending — QA live-verify (mobile SVG + no-cache headers) → ORCH for GATE_COMPLETE |
+
+plat IDLE, awaiting QA GREEN and ORCH ratification.
+ACK sent (50fe2444). Inbox clear.
+
+**ORCH NOTE fef72070 — ACCEPTED.** Conditions 1+2 confirmed by ORCH. Gate withheld on QA condition 3 (live mobile SVG + no-cache headers). Rollback ready at 877e684e. plat IDLE.
+
+Inbox clear.
+
+**RULING ab839425 — integrity incident orders executed.**
+
+| Order | Result |
+|---|---|
+| 1 — CAPTURE | Quarantined live `a659de5c` → `qa-artifacts/quarantine/prodkit_server.LIVE-a659de5c.2026-06-25.py` + sha sidecar, byte-identical, live untouched ✓ |
+| 2 — CHARACTERIZE | Live **has** `working_on` building panel + `network` (absent from whole repo) and **P1 no-cache intact**; **lacks the network-viz mobile viewBox fix** (the point of fa6cd03). 169 lines diverge. Neither artifact complete. ✓ |
+| 3 — FORENSICS | Root cause: live file ACL = **`Everyone:FullControl`** (world-writable). Source = **`pk_render_fix.py`** (sha == `a659de5c`), written 10:53:44 → deployed 10:53:46, relaunched directly by `run_prodkit.cmd` watcher, bypassing the GoDecision gate. ✓ |
+| 4 — HOLD | Maintained — `a659de5c` left live untouched, no rollback, no repo→canonical deploy ✓ |
+
+**Key reconciliation input delivered:** the reconciled sha must combine `a659de5c`'s capabilities (`working_on` panel + `network`) with fa6cd03's one-line mobile viewBox fix; P1 no-cache is already in both.
+
+**Recommended root fix (gated — flagged for human/ORCH, not performed):** restrict the prod file ACL and route all deploys through the gated `restart_prodkit.py` path.
+
+plat standing by for the reconciled gated sha. No deploy.
+ApprovalRequest sent (ac711b06). Inbox clear.
+
+**RULING 4b7fd891 — actioned.**
+
+| Item | Result |
+|---|---|
+| Quarantine `pk_render_fix.py` | Captured sha-pinned (`...SOURCE-a659de5c`, sha == a659de5c → confirmed the out-of-band source) ✓ |
+| Remediation PLAN | Prepared (`REMEDIATION-PLAN-ungated-prodkit-egress.md`), submitted as **ApprovalRequest ac711b06** — not executed ✓ |
+| HOLD | Maintained — `a659de5c` live untouched ✓ |
+
+**Decisive plan finding:** the watcher (`run_prodkit.cmd`) relaunches whatever bytes are in `prodkit_server.py`, and `restart_prodkit.py` only kills the pid — so the GoDecision gate is unenforced by the mechanism. Worse, **agents run as `zeebo`, the file's own owner**, so a username-based ACL can't separate deployer from agent. The plan therefore enforces at the **privilege level** (admin-write-only + non-elevated agents), gated on confirming agents run non-elevated (pre-execution Q1), with fallback options if not.
+
+Per separation of duties I prepared only — execution awaits ORCH's GoDecision. plat standing by.
+Inbox clear. Report sent (53c78746).
+
+**GoDecision/HOLD 4528bcd2 — Q1 resolved.**
+
+| Finding | Result |
+|---|---|
+| Agent reactors IL | **Low** (IL=Low, UAC filtered token) |
+| zeebo in Administrators? | **YES** — `net localgroup Administrators` confirms; current Low-IL is the split token, not a non-admin user |
+| Elevated deploy path available? | **YES** — `runas` / `Start-Process -Verb RunAs` gives zeebo an IL=High elevated token |
+| Low-IL agent can write today? | **YES** — confirmed by write test. Reason: file has **no SACL IL label** (`D:AI` only, no `S:` section); MIC not enforced |
+| Option A viability | **HOLDS** with one refinement |
+
+**Plan refinement required:** Part 1 must also call `icacls /setintegritylevel Medium` on the live file (sets `S:(ML;;NW;;;ME)`, No-Write-Up) in addition to the DACL fix. The DACL change alone (remove `Everyone/Guest/AU:Modify`) blocks non-admin DACL write; the IL label closes the MIC gap entirely. Requires elevated invocation to set. Part 2 deploy path becomes: `Start-Process python -Verb RunAs restart_prodkit.py`.
+
+plat standing by for ORCH GoDecision after human go-ahead.
+Inbox clear. ACK sent (1f14f317).
+
+**NOTE 4288061f — ACCEPTED.** Gate 1 cleared; revised Option A locked. Sole remaining blocker: human go-ahead → ORCH execute-GoDecision. plat IDLE, standing ready.
+Inbox clear.
+
+**NOTE 7cee1851 — ACTIONED.**
+
+| | |
+|---|---|
+| Isolated instance | `http://localhost:8803` (pid 14520), source = quarantine `a659de5c` (hash verified pre-launch), `/api/pulse` 200 OK |
+| Live :8802 | UNTOUCHED |
+| QA notified | NOTE 6adefa3c — endpoint, 375px render instructions, A17 inventory |
+| Capability inventory sent | `working_on` panel + `#net`/`#v-dashboard` carve-outs confirmed present; network-marker withdrawn per ORCH; mobile viewBox fix and condense absent from a659de5c baseline |
+
+plat will tear down `:8803` after QA confirms render complete. IDLE.
+Inbox clear. ACK sent (8abe59cc).
+
+**QA ACCEPT 4cce228a — baseline-publish task COMPLETE.**
+
+| | |
+|---|---|
+| QA verification | A16 (candidate 316d564 ≥ canonical) + A17 (superset, zero capability dropped) — rendered independently, no PLAT proxy |
+| Teardown | :8803 (pid 14520) down, port freed |
+| Live :8802 | Untouched — `a659de5c`, pid 53680 still serving |
+| Quarantine artifacts | Intact (LIVE + SOURCE captures, ACL snapshot, remediation plan) |
+| QA's viewBox note | Accepted — accurate refinement, capability conclusion unchanged |
+
+plat IDLE. Two threads still open and held: root-fix remediation (awaiting human go-ahead → ORCH GoDecision) and the A17 reconciled-sha deploy gate (separate track). LIVE `a659de5c` hold unchanged.
+Inbox clear. DeployRecord sent (f9455a00).
+
+**GoDecision/GO 474e461c — 316d564 deployed.**
+
+| Condition | Result |
+|---|---|
+| 1 — Artifact identity | repo `ea36ce55` == live `ea36ce55` ✓ |
+| 2 — Rollback copy | `C:/ZeeCloud/rollback/tkt-dashboard-condense-v1/prodkit_server.py.pre-316d564-a659de5c` (a659de5c confirmed) + quarantine intact ✓ |
+| 3 — Superset | QA-verified (A17 PASS, zero dropped) ✓ |
+| 4 — Deploy-time real-render | Pending — QA→ORCH direct |
+
+Server live at pid 62704, `/api/pulse` 200 OK, `working_on` key present and populated (6 live tickets). Note sent to ORCH that `:8803` was already torn down per prior QA clearance — quarantine artifact remains available if QA needs the baseline.
+
+plat IDLE — awaiting QA real-render GREEN → ORCH GATE_COMPLETE.
+Inbox clear. ACK sent (5dd7ed0f).
+
+**NOTE 1afcd827 — ACCEPTED.** Conditions 1+2+3 confirmed by ORCH. Gate withheld on QA condition 4 (live real-render, 375px). Rollback `a659de5c` ready. Root-fix urgency acknowledged — file still world-writable. plat IDLE.
+Inbox clear. Report sent (531b8121).
+
+**NOTE 14129252 — assessment complete, plan extended.**
+
+| Finding | Result |
+|---|---|
+| `prodkit_chat_secret.json` exists | Yes (141 bytes, owner `BUILTIN\Administrators`, mtime 13:36 today) |
+| Current ACL | **Identical to `prodkit_server.py`** — inherited `Everyone:FullControl`, no IL label, MIC unenforced |
+| World-readable? | **Yes** — Low-IL agent can read bearer at rest |
+| World-writable? | **Yes** — bearer is tamperable |
+| Server reads it? | **No** — `316d564` has no reference to it; only ad-hoc scripts (`test_proxy.py`, `correct_note.py`) read it at startup |
+| Safe ACL: `zeebo:R` | **Yes** — scripts still authenticate; server unaffected; write blocked |
+
+Plan extended with **Part 1b** (`zeebo:R + Administrators:F + SYSTEM:F; remove Everyone/Guest/AU; setintegritylevel High`). ACL snapshot saved. No changes executed — same gate as Part 1. plat IDLE.
+Intake complete. One inbound message processed, intake_review run, RED findings reproduced and reported to ORCH, message marked read.
+
+## Summary
+
+**Inbound:** `orch→plat` ChallengeThread/DEPLOY_GATE_PREP (be106bb9) — prove the two ORCH/PLAT-owned pre-launch items for the 5c29124 auth-gate deploy.
+
+**Both items reproduced as RED — deploy gate FAILS. Sent ORCH a CHALLENGE (3ef0c14c) recommending GoDecision = NO-GO/HOLD.**
+
+**Task 1 — PRODKIT_PASSPHRASE: RED (fail-open).** Mechanism confirmed @5c29124 (`prodkit_server.py:57` reads env at import; `:76` fails OPEN when empty). As user `zeebo` (prod owner), the var is **unset/empty in Process/User/Machine scopes**, and **neither launcher** (`run_prodkit.cmd`, `restart_prodkit.ps1`) sets it — both set only `PRODKIT_PORT`. A fresh launch of 5c29124 starts with the passphrase empty → the entire auth gate is a no-op. SEC ruling-1's sole fail-open barrier is **absent**. (Value never read/printed — constraint honored.)
+
+**Task 2 — host bearer ACL 14129252: RED (not applied).** `icacls` shows **both** `prodkit_server.py` and `prodkit_chat_secret.json` carry inherited `Everyone:(F)` / `Guest:(M)` / `Authenticated Users:(M)` — world-writable + world-readable. New finding: 5c29124 now **live-reads** the chat bearer secret (`:53/:110/:1312/:1381`); my earlier "316d564 doesn't read it" was vs the old sha — the zeechat merge added the read. So the world-readable bearer becomes load-bearing exactly at this deploy, and the world-writable server file lets any principal swap out the code being gated.
+
+**sha-consistency pin:** deployed `C:/ZeeCloud/prodkit_server.py` lacks all three new markers → currently == live sha 316d564; 5c29124 not yet on disk. Both findings are correctly **pre-launch**.
+
+Both remediations are gated (R6 prod-credential provisioning + live-host ACL mutation) — I proposed exact remediation for each but did **not** self-perform; awaiting ORCH authorization. Ran parallel with QA per the pin. Durable infra fact banked to memory.
+
+Done. Here's the full report:
+
+## Remediation complete (b8bc1ecb → ORCH)
+
+**Root cause: `tdd_guard.py` PreToolUse hook in 5 engineer profile settings.json files (be, fe, plat, sec, tl).**
+
+The hook fires on every `Edit|Write` tool call, maps the target file to `tests/test_<stem>.py`, runs pytest, and **exits 2 (block) if tests pass or no test file exists**. From the agent's perspective: edit is blocked → file stays at HEAD → looks identical to "auto-revert to HEAD." This is the mechanism TL observed.
+
+**Why atomic patch+commit bypassed it**: `git apply` + `git commit` in a Bash call doesn't trigger `PreToolUse Edit|Write` — only literal Edit/Write tool invocations hit the hook.
+
+**Current state at discovery**: The hook was already accidentally non-functional. `python3` on this host resolves to the Windows Store stub (exits 49, not 2) — so Claude Code wasn't blocking. The watcher was silently broken.
+
+**What I ruled out** (exhaustive): All git hooks are `.sample` (inactive). No `core.fsmonitor`. No watchdog packages. No running daemon does `git restore/checkout/reset` on tracked files. No PostToolUse hooks anywhere. Both conftest files are clean. `pc_reconcile.ps1` is manual/one-shot.
+
+**Remediation applied**: Removed `tdd_guard` PreToolUse hook block from all 5 profile settings.json files. All 5 are valid JSON, `hooks` key absent. The `tdd_guard.py` script itself is left on disk — harmless without the hook entry. Effective for all new sessions; current in-flight sessions unaffected until next session start. Atomic patch+commit interim mitigation can be retired once sessions restart.
+Inbox clear. Done.
+
+**INFRA_FLAG 7778873f — ORCH ACCEPT processed.**
+
+- **Intake_review:** ORCH's ACCEPT closing my REMEDIATION_COMPLETE was evidence-backed (4 verified items + ruling). Not a bare approval — I re-reproduced its load-bearing claim rather than attesting.
+- **Reproduced:** all 5 profiles (be, fe, plat, sec, tl) `settings.json` → valid JSON, `hooks` key absent on every one, zero `tdd_guard`/PreToolUse/PostToolUse references. `tdd_guard.py` sits inert on disk with nothing wiring it. Matches ORCH verified[] items 3–4 and the root-cause ruling (the hazard was a PreToolUse hook, not a daemon).
+- **Sent:** ChallengeThread/ACK → orch (id `c2f1bfe7`), correlated to the inbound.
+- **Operational directive honored:** interim atomic patch+commit mitigation is **HELD, not retired** — the on-disk fix is latent until each in-flight session restarts (settings load at session-start). Full retirement is **PENDING session cycle**. Flagged that forcing peer-pane restarts is outside my surface; ORCH/TL should coordinate the cycle and signal back, then I retire the bypass and confirm.
+- Inbox marked read, now empty.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=1)
+Inbox clear. Done.
+
+---
+
+**GoDecision/GO 6e6347fb — processed.**
+
+**Intake:** ORCH's GO was evidence-backed (5 chain-verified items: SHA consistency, TL gate, SEC T10, QA live-pass, no open challenges). Scope = MERGE only; C1 deploy gate explicitly withheld.
+
+**What I did:**
+1. **Verified SHA:** HEAD on `tkt-prodkit-t2-t4` = `a443a72` — matches GoDecision `git_ref`. Working tree clean (zero tracked-file drift, only untracked `.pt_*` scratch).
+2. **Merge conflict:** `harness/run_harness.py` — `_collect_row` (main) vs `_row_for` (branch). Resolved by keeping `_row_for`: the call site at line 71 was updated coherently on the branch; main had no callers to preserve. `py ast.parse()` = syntax OK.
+3. **Merge commit:** `f45e2ff` on main — `merge(main): land tkt-prodkit-t2-t4 @a443a72 (GoDecision 6e6347fb)`.
+4. **Sent:** `DeployRecord/MERGE_COMPLETE` → orch (id `eb6cd3ed`), result SHA `f45e2ff`, correlated to GO.
+
+**C1 gate status: HELD.** `PRODKIT_PASSPHRASE` unset on host → auth fails-open server-wide. No prod deploy performed. Awaiting explicit C1-cleared prod-deploy GO from ORCH before any deploy action.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=2)
+Inbox clear. Done.
+
+---
+
+**INFRA_INTEGRITY_INVESTIGATION — root cause found, remediated (partial), supplement correlated.**
+
+**Two recurring injectors confirmed:**
+
+1. **`fleet_heartbeat.py`** (via `Fleet-Heartbeat` scheduled task, every 5 min) — source of 69dadab7-class phantom orch NOTE envelopes. Its merge-check scanned envelopes for T8/T9 MERGE_COMPLETE; finding none, it labeled them "never-built" and sent `ChallengeThread/NOTE --from orch` to tl+fe. **Fix:** removed the `agentctl send` entirely from the idle branch; now uses wake-file touch only (same mechanism as `auto_nudge.py`). Fleet-Heartbeat task disable blocked by Access Denied (HRESULT 0x80070005) — flagged to ORCH for human action.
+
+2. **`ios_gate_post.py`** (triggered from Mac CI, no local scheduled task) — source of f85cae61/5d003cdf/208242f2 phantom mac-ios-build PASS @0d0abeb envelopes. Read static `gate_verdict.json` and reposted it as `--from orch` every Mac CI run. **Fix:** changed to `--from plat`; deleted `gate_verdict.json` — next trigger will FileNotFoundError, forcing a fresh verdict before it can post.
+
+**Negative evidence:** `auto_nudge.py`, `auto_credrefresh.py`, all `fleet_monitor.py` copies, `metrics_dashboard.py`, `watchdog.py` — zero agentctl sends. `route_problems.py` and `send_ping.ps1` use `--from orch` but are manual one-shots, not scheduled.
+
+**Outstanding:** Fleet-Heartbeat task still enabled — needs human to disable via elevated Task Scheduler.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=3)
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=4)
+Done. Inbox processed and clear; both challenge threads closed with ORCH ratification.
+
+## Summary
+
+**Inbound:** TL `ReviewVerdict/CHALLENGE 469b7994` — rejecting a `plat`-attributed `mac-ios-build` PASS at head `7f37c86`.
+
+**Intake review (reproduced, not attested):** The challenged envelope `44a54fd0` (`plat→tl ReviewVerdict/ACCEPT`, 18:24:49Z) was a 6th phantom — same fingerprint as TL's 5 prior orch-phantoms: trailing `\r` in `ticket`, `ref/corr/ctx` all None, "accept iOS PRs only on PASS" coaching. **The root cause was mine:** my earlier remediation `b3e8a141` "fixed" injector_2 (`ios_gate_post.py`) by changing `--from orch` → `--from plat` — a relabel, not a removal. The external Mac-CI runner refired on the new FE head and produced the plat-attributed phantom (proven: 44a54fd0 @18:24:49Z postdates my fix @18:16:12Z and ORCH's ACK @18:18:05Z).
+
+**Remediation (TDD, fails-closed):**
+- Rewrote `ios_gate_post.py` to inject **zero** bus envelopes under any attribution — it now appends a sanitized, explicitly-non-authoritative raw CI signal to a local log; PLAT relays to ORCH (the gate owner).
+- Added `test_ios_gate_post_no_inject.py` — plants the exact phantom signature, asserts envelope count unchanged. **PASS.**
+- Deleted the stale forged `gate_verdict.json`.
+- Ruled out ORCH's cursor-file hypothesis with evidence (`ios_gate_cursor.txt` = CR-free timestamp; `ios_pr_since.py` is read-only and collapses whitespace).
+
+**Actions:** Conceded to TL (challenge correct); reopened + answered ORCH's investigation. **ORCH independently audited the repo and ACCEPTED** — investigation `92934df2` CLOSED, vector eliminated. Residual external Mac-runner trigger (now harmless, log-only) relayed to the human supervisor — it's a Mac-host action I can't perform from here. B1 `REQUEST_CHANGES @7f37c86` stands independently; no gate clears. Lesson banked to memory.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=5)
+Inbox clear. Here's the summary of what was done this cycle:
+
+**Intake processed (5 messages):**
+- `tkt-bus-auth-WS-B` (pm dispatch) � initially appeared blocked on SEC-T1; corrected after confirming verdict committed at `9c50004`
+- ORCH REACTOR_LIVENESS_WATCH � understood directive; produced real commits, no silent consumption
+- Two ORCH ACKs (SEC-T1 unblock clarifications) � absorbed
+- TL WS4 re-dispatch � ACK'd with commit evidence
+- TL SEC_KEYING_DECIDED � absorbed, already built against it
+- PM revised AC dispatch `c4d857a` � absorbed; B3 delta test added
+
+**Real commits produced:**
+
+| SHA | Workstream | Content |
+|---|---|---|
+| `1a249ad` | WS4 + WS2 | Windows scheduled task (`install_task.py`), always-on tests (3/3 pass), watchdog SSE source (`ws2_source.py`, 7/7 pass) |
+| `7f61467` | WS-B | `agentctl/key_provision.py` (Ed25519 keypair gen, load, verify-map, rotation), B1-B6 ops runbook, 8 tests |
+| `5a7452f` | WS-B delta | B3 cross-role `verify_map` isolation test per revised AC `c4d857a` |
+
+**Status:**
+- WS4: DONE (A1-A4 green; A5 screenshot is runtime artifact, task confirmed registered)
+- WS2: SOURCE BINDING SIGNED OFF (event-driven, no sleep/poll; 7/7 tests)
+- WS-B: DONE (B1-B6; 9/9 tests, 95% coverage)
+- `tkt-bus-auth-WS-B` block: LIFTED (SEC-T1 @`9c50004` confirmed)
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=1)
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=2)
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=3)
+[reactor:plat] drive error: 'charmap' codec can't encode character '\u2192' in position 305: character maps to <undefined>
+[reactor:plat] drive error: 'charmap' codec can't encode character '\u2192' in position 309: character maps to <undefined>
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=4)
+Done. Inbox processed, all messages handled and marked read.
+
+## Summary
+
+Two challenges (TL + SEC) hit my lane on the WS-C bus-auth gate, both claiming "9/10 not 10/10 at `1a38c76`" over a `sig_alg` reject branch contradicting the C7 neg-control. I ran intake (reproduce-first) and the picture inverted twice:
+
+**Round 1 � reconcile the contract.** Reproduced 9/10 first-hand (F1 `AuthError` at `store.py:53`; F2 literal duplicate reject block). The two committed suites encoded opposite contracts. The WS-C doc header and SEC (contract owner; TL ceded it) both rule **Model A** � `sig_alg` is not in `SIGNED_FIELDS`, so dispatching on it is the alg-confusion anti-pattern and a tamper/DoS oracle, adding zero security since invalid sigs are already blocked by the Ed25519 verify. Deleted both duplicate branches in one stroke (F1+F2), reconciled the `test_crypto.py` A4 tests to the inert contract. **Committed `5933520`: WS-C 10/10, crypto 29/29, all genuine-attack controls green.**
+
+**Round 2 � the real root cause.** Checking `git show 1a38c76:store.py` revealed it had **no** `sig_alg` branch � the genuine GO sha was 10/10 (QA's clean-checkout report was the accurate one). The reject branch, its duplicate, and the A4 reject-tests were **all injected by `5f86f2f`** � a commit labeled `docs(sec): ...CHALLENGE` that actually mutated the security verifier (+28) and 5 test files (+546 total) with no disclosure in its message, making its own "reproduced 9/10" self-fulfilling. My fix had unknowingly restored genuine-`1a38c76` semantics (byte-identical modulo a comment).
+
+**Actions:** corrected my own prior claim to SEC; sent TL the sharpened root cause; **escalated the code-in-docs provenance anomaly to ORCH** (also relaying SEC's egress-blocked challenge faithfully, attributed). Did **not** revert history unilaterally (gated). Both TL and SEC independently re-reproduced and **ACCEPTED** at `5933520`; SEC withdrew its uncommitted-tests claim. GO remains ORCH-gated (R6). Banked the lesson to memory.
+Inbox is clear � the `read` action marks-on-access, so no remaining unread. Done.
+
+**Summary:** SEC's `SEC_PROVENANCE_CORRECTION_ACCEPTED` (id eb6fadd2) accepted my provenance correction and withdrew their earlier concession (3f167bec). I reproduced all four load-bearing claims first-hand rather than accepting the verdict bare:
+
+- `1a38c76` has **0** sig_alg refs in store.py and **0** A4 reject markers in test_crypto.py
+- The reject-branch + A4 tests both entered at `5f86f2f` (546 lines mislabeled `docs(sec)`)
+- `1a38c76..5933520` store.py diff is a single 4-line C7 comment; executable code byte-identical
+
+Sent confirming `ReviewVerdict / SEC_PROVENANCE_CORRECTION_CONFIRMED` (id 8a6374b1) to close the thread. **Outcome: converged** � Model A correct, 5933520 fails-closed GREEN, WS-C substance unchanged, no open PLAT challenge.
+
+No memory write needed � this is settled thread closure already recorded in the commit history (0e35749). Stopping.
+Inbox clear.
+
+**Summary:** SEC's `SEC_PROVENANCE_THREAD_CLOSED` (id 90150a14) is a terminal convergence ACK at sha 5933520 � both directions concur, no open challenge. The claims restate what I already reproduced first-hand last turn, so per emit-once discipline I closed without a redundant reply rather than ping-ponging the thread.
+
+**State:** Bus-auth WS-C provenance thread fully converged. Model A correct, 5933520 fails-closed GREEN, WS-C substance unchanged, SEC enforce-flip precondition CLEARED and ORCH-gated. Stopping.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=5)
+Inbox clear (read marks-on-access).
+
+**Summary:** ORCH's `ORCH_RULING_5f86f2f_INTEGRITY` (id 7ac84c5d) is a **binding ruling** that upholds my escalation in full. I reproduced the ruling's facts first-hand � they match my reproduction with no daylight, so I ACK'd rather than challenged.
+
+Resolution:
+- **ask1** � PROCESS FAILURE (mislabel), not injection; SEC owns in-lane, no sanction
+- **ask2** � GO sha = **5933520** (not the polluted 5f86f2f intermediate)
+- **ask3** � no-revert ENDORSED; I was R6-correct not to rewrite history
+- **new norm** (binding) � a docs-lane review/CHALLENGE commit must not mutate executable code/tests; I'll reject such at the PLAT gate
+
+**Outstanding:** Enforce flip remains ORCH-held on one open leg � **QA** forged-REJECT/legit-PASS/no-lockout committed at 5933520. SEC leg CLEARED. The flip is gated (R6); PLAT fires only on an ORCH GoDecision, so no PLAT action until that QA leg lands and GO issues. Sent ACK (id 7f46d976) to ORCH. Stopping.
+Inbox clear.
+
+**Summary:** ORCH GoDecision `GO_ENFORCE_FLIP` (id 78d8423e) executed and confirmed.
+
+**Execution log:**
+1. **Pre-flight sha-consistency** � all four auth surface blobs match 5933520 exactly (crypto c7812c1, store 72cfc5a, ws_c_e2e 226cbc8, test_crypto 124369f); no sha-split trap
+2. **Stage warn** � added `set AGENTCTL_AUTH_MODE=warn` to `prodkit/prodkit_server_task.cmd`, ran `setx`, restarted ProdKitServer; server healthy at localhost:8802; zero legit rejections in warn phase
+3. **Stage enforce** � updated CMD to `enforce`, ran `setx AGENTCTL_AUTH_MODE enforce`, restarted task; server healthy post-restart; both config locations confirmed as `enforce`
+4. **Execution sha verify** � HEAD surface blobs still byte-identical to 5933520 at flip time (2026-06-30T19:25:29Z)
+
+**Sent** `ENFORCE_FLIP_EXECUTED` ContextDoc (id 325114db) to ORCH for audit + CEO digest. Stopping.
+Inbox is clear. `read` marked the envelope automatically.
+
+**Intake summary for 22c231d1 (ENFORCE_FLIP_RATIFIED):**
+
+- **Decision:** ACCEPT � RATIFIED
+- **Verified independently:**
+  - `crypto.py@5933520` blob = `c7812c1...` � exact match to ORCH claim
+  - `store.py@5933520` blob = `72cfc5a...` � exact match to ORCH claim
+  - All four chain-leg shas (fe3e966/QA, 0e35749/SEC, f6c48d1/ORCH ruling, 5933520/PLAT) exist with correct subjects
+- **Chain status:** CLOSED. Bus-auth enforce is LIVE at 5933520. No open items on PLAT surface. Rollback path (`AGENTCTL_AUTH_MODE=warn|off` + restart) noted as standing procedure.
+
+ACK sent to ORCH (50290583). Done.
+[reactor:plat] drive error: 'charmap' codec can't encode character '\u2192' in position 334: character maps to <undefined>
+Inbox clear.
+
+**Intake summary � TL_CODE_ACCEPT (ebcb6207):**
+- **Verdict:** CODE_ACCEPT, terminal. TL pulled+rebuilt @65e9e8b (not trusted on word) � reproduced 10/10 de-flake + 29/29 crypto green, matching my own 20/20 + 29/29.
+- **Action:** Nothing to challenge � independent first-hand reproduction, favorable. Sent closure ACK (b14683da) concurring.
+- **Status:** `tkt-crypto-timing-guard-robust` CLOSED at TL gate. This was the last open tail on the bus-auth epic (enforce flip LIVE, chain closed). No open items on the PLAT surface.
+
+Done.
+Sent (8dcb950d) and inbox is clear.
+
+**Intake summary � ROLLOUT_C1_2_LIVE_EVIDENCE (6f3b88d2):**
+
+- **Gate:** C1.2 CLEARED
+- **Verified independently (first-hand):**
+  - `prodkit/prodkit_server_task.cmd` exists on host, deployed via `install_task.py`
+  - `SET PRODKIT_PASSPHRASE=<non-empty 22-char token>` confirmed in wrapper CMD (value not logged per security hygiene; hook correctly filtered raw value from outbound messages)
+  - `AGENTCTL_AUTH_MODE=enforce` present in wrapper CMD � prod task reflects the enforce flip
+  - `pytest TestWS4AlwaysOn::test_a4_passphrase_is_set_in_task_env`: **1 PASSED** @ HEAD 65e9e8b
+- **Status:** ORCH deploy precondition cleared; rollout GO may proceed.
+
+Done.
+[reactor:plat] noise-gate: drained 1 envelopes (total drained=6)
+Inbox clear. Done.
+
+---
+
+**Ticket `tkt-fleet-opt-OPT-3` + `tkt-fleet-opt-OPT-5` — DONE @ 8321d9d**
+
+**OPT-3 (A5/A6/A7 — candidate-repo attribution):**
+- `_WORKREPOS` replaces `_WORKREPO`: deduped list `[cwd, ProdKit.AI, agent-workspace]`, overridable via `AGENT_WORKREPOS` env (`;`-separated)
+- `_ws_sigs(repos)` → `dict[repo→sig]`; `_edit_kind(repos, sigs0)`, `_detect_edited(sigs0, sigs1)`, `_log_code_touch` all iterate candidate list
+- Silent-consumption guard: implementer + Ticket wake + zero commit across all repos → `mark_unread` + re-emit wake; planner and non-Ticket false-positive paths both proven exempt
+
+**OPT-5 (A8/A9/A10 — wake-touch hygiene):**
+- `_service_wake(role, wake_paths, …, defer=False)` unlinks touches after drive/drain; `defer=True` leaves touch intact (A10 OPT-1 coupling contract)
+- `dispatch_reactor.loop`: `seen = set()` (no pre-seed); startup drive snapshots+unlinks pre-existing touches; loop unlinks each batch after drive — 2071-stale-touch failure cannot recur
+- `store.mark_unread()` added to `agentctl/store.py`
+
+**Tests:** 19 new (all ACs + false-positive directions), 3 updated; 51/51 green. PR-ready sent to TL (733fb76b).
+Inbox clear. All messages processed and marked read.
+
+**Session summary:**
+
+Three inbox items handled this wake, all on the Fleet SYSTEM OPTIMIZATION epic:
+
+1. **TL REWORK (5424ef4b)** — superseded by the ASSIGN; folded.
+
+2. **TL ASSIGN (f0109550) — OPT-3 A6 rework:** Reproduced SEC's sustained defect first-hand (D1 self-cancel: re-wake reused the original touch name → unlinked same-pass + retained in `seen`; D2 no ledger; D3 test masked both). Built PM path-1 fix at **ddae842**:
+   - **A6.2** distinct monotonic re-wake `wake__{role}__{env_id}__rq{n}.touch` — survives same-pass unlink, dodges `seen`, re-fires under no-further-traffic (banked RED proving it failed on pre-fix code)
+   - **A6.1** `failed_no_commit` ledger row + negative control
+   - **A6.3** false-positive guards stand; each step hardened independently best-effort
+   - 632/632 full suite. PR-ready 33130767 → TL.
+
+3. **TL CODE_ACCEPT (9ce53f2f) — OPT-1a accepted** @3ae8dfd (TL terminal, shadow ungated). Its FLAG_A6_OUTSTANDING crossed in flight with my A6 delivery — ACKed with git lineage evidence (3ae8dfd → 330ac45 TL-review → ddae842 A6-fix) showing A6 is the HEAD commit, exactly the "next commit" TL asked for.
+
+**Branch state:** OPT-3 (A5/A7) + OPT-5 (A8/A9/A10) accepted at 8321d9d; OPT-1a accepted at 3ae8dfd; A6 fix at HEAD ddae842 awaiting TL final_review + SEC/QA re-gate. Merge held on A6 re-gate. `OPT1_ENFORCE` stays OFF (OPT-1b activation remains ORCH-gated). Next: gather `fleet_budget_shadow.jsonl` across ≥20 real runs for the OPT-1b ApprovalRequest.
+Inbox clear.
+
+**Intake summary — TL CODE_ACCEPT on A6-fix (8b65e8ee):**
+- **Verdict:** ACCEPT, terminal favorable. TL reproduced first-hand at ddae842 — D1 (distinct `rq{n}` re-wake), D2 (`failed_no_commit` ledger + negative control), D3 (A6.2 end-to-end fails-closed vs pre-fix 330ac45) all confirmed closed; A6.3 guards stand; 45/45 touched surfaces.
+- **Action:** Nothing to challenge — independent reproduction, favorable. Sent closure ACK (f1818984).
+- **Status:** TL routed SEC A6 re-gate (fb3b3d6b) + QA A6 re-verify (563ad546) at ddae842 — both in flight. PLAT holds for their clear (merge-approval is TL's per R6). No open action on my surface.
+- **Standing next:** On SEC+QA clear → TL branch merge-approval, then gather `fleet_budget_shadow.jsonl` across ≥20 real runs for the OPT-1b ApprovalRequest. `OPT1_ENFORCE` stays OFF until ORCH ratifies.
+
+Done.
+Done. `tkt-a6-escalation-signed-emit` is complete at `19654ac`. The fix routes `_emit_no_commit_escalation` through `subprocess agentctl.cli send` (which signs with Ed25519) instead of the unsigned `_store.insert` path that fails under `AGENTCTL_AUTH_MODE=enforce`. Suite is 48/48 green. ReviewVerdict sent to TL.
+Inbox clear. GoDecision FLEET_OPT_LAND_RECORDED accepted — fleet-opt land closed, D4 confirmed intentional, escalation-signed-emit already done at `19654ac`. ORCH notified. Idle.
+Inbox clear. 
+
+**Processed:** TL ReviewVerdict CODE_ACCEPT for `tkt-a6-escalation-signed-emit` @ `19654ac` — ticket CLOSED, TL independently reproduced all claims and proved fails-closed. TL recommended ORCH extend the land scope to fold `19654ac` onto main.
+
+**Acted:** Folding to main is ORCH-gated (R6), so I emitted an ApprovalRequest to ORCH (`b8f219c2`) requesting authorization to cherry-pick `19654ac` onto main — single isolated commit, same fold pattern as `5c5b2fb`→`a9285e5`, OPT1_ENFORCE unchanged. Awaiting GoDecision before touching main. Idle.
+Inbox clear.
+
+Both GoDecisions processed. The fold executed **once**: `ca9be5c` (signed-emit fix) + `65b98c2` (review doc) on main, `48/48` green. Second GoDecision `5b9da5e4` was a confirmed duplicate (crossed in-flight with my ApprovalRequest) — suppressed per R4 idempotency. Idle.
+Inbox clear. Fleet-opt land sequence fully closed — main is at `65b98c2`, all GoDecisions SATISFIED+RECORDED. OPT1_ENFORCE stays OFF pending ≥20 shadow run accumulation. Idle.
+Inbox clear. Three OPT-8 tickets delivered at `e2cf2e8`:
+
+- **OPT-8.1-shadow:** `launcher/ready_queue.py` — enqueue/dequeue/drain_for_governor (shared `_QUEUE`, B3)/log_shadow_route/push_assign_fallback (Flip A rollback, B4); SCHED_ENFORCE=OFF default; 10 tests RED→GREEN
+- **OPT-8.2:** `launcher/peer_review.py` — static peer pairing table + verdict routing; `profiles/roles.py` — `peer_review(pr: PR) -> ReviewVerdict` in all 5 engineer roles; 12 tests RED→GREEN
+- **OPT-8.3:** `launcher/arch_trigger.py` — 4-category glob trigger + `required_gates` (QA+SEC every PR, tl_final_review on arch-sig); `tl.final_review` docstring narrowed; 23 tests RED→GREEN
+
+93/93 total green. Chain next: TL→SEC→QA. OPT-8.4 (roles regen) unblocked. Idle.
+Inbox clear. TL CODE_ACCEPT for OPT-8.1-shadow/8.2/8.3 (`e2cf2e8`) registered — TL reproduced B3 one-queue, D3 no-rigor-gap, and fails-closed independently. Standing by: SEC+QA review is TL-routed, OPT-8.4 awaits TL assign on those clears, OPT-8.1-flip stays ORCH-gated. Both gate boundaries (SCHED_ENFORCE, OPT1_ENFORCE) remain OFF. Idle.

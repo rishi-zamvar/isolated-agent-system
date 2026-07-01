@@ -1,0 +1,12 @@
+{
+  "model": "claude-sonnet-4-6",
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(*deploy*)",
+      "Edit(src/**)",
+      "Write(src/**)"
+    ]
+  }
+}

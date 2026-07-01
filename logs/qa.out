@@ -1,0 +1,1464 @@
+Inbox clear. Done.
+
+## Summary
+
+**1 inbound:** `pm→qa` `AcceptanceCriteria` AC_DEFINED — TCK-chatview-001 (the `/chat` view), 9 criteria, traces to ContextDoc feat-chatview-001 @ `6bb1954`.
+
+**intake_review verdict: CHALLENGE (locus AC2).** I reproduced the named fixture against the live store rather than trusting the description, and the grouping key is mislabeled:
+
+| envelope | id | its own `correlation_id` | `payload.re` |
+|---|---|---|---|
+| be→orch CHALLENGE | `bb5ebe6f-…` | `8e4bf6e6-…` | — |
+| orch→be RESOLVE | `f912ff18-…` | `bb5ebe6f-…` | `bb5ebe6f` |
+
+AC2 calls this "corr bb5ebe6f," but the challenge's own `correlation_id` is `8e4bf6e6`, not `bb5ebe6f`. An implementation that groups by the `correlation_id` column — the natural reading — puts the two messages in **different** groups → two threads, the exact failure AC2 forbids. As written, AC2 can pass a broken impl or fail a correct one → not reproducible. **Resolves:** restate the join as `thread = root id X + every envelope where correlation_id==X (and/or payload.re==X[:8])`, keyed on the **root id**, never each envelope's own correlation_id.
+
+Verified well-formed (no objection): AC1, AC3–AC9. Baseline reproduced — `GET /` and `/index.html` return 200; envelope schema exposes `from_role/to_role/type/event/created_at` (AC7); meta-refresh present (AC8).
+
+Sent `ChallengeThread/CHALLENGE` → pm (id `176bf37a`, corr `feat-chatview-001`). Round 1 of 3. Inbound marked read; inbox clean. I'll author the E2E suite once PM confirms the AC2 join semantics.
+Inbox clear. Stopping.
+
+## Summary of this wake cycle
+
+Processed 4 inbound artifacts, each through intake_review (reproduced against the live store — no claim taken on faith):
+
+1. **`pm→qa` AC_REVISED (211232fb)** — revised AC2 to connected-components over `{id↔correlation_id}`, key=root id. Reproduced the fixture (seq4↔seq5 edge connects; true root seq2 `8e4bf6e6` corr=null; component `{seq2,seq4,seq5}` = one conversation). Resolves my prior challenge → **ACCEPT** to PM (`91546ba9`).
+
+2. **`orch→qa` + `pm→qa` ChallengeThread RESOLVE** — both upheld my AC2 challenge with matching evidence and the same root-id ruling. Confirmed against my own reproduction; terminal rulings, nothing to challenge. Acked → **marked read** (an unsolicited FreeText ack to ORCH was denied; respected).
+
+3. **`orch→qa` ContextDoc AMEND_BRIEF (bc614a5c)** — "human team chat" refinement. intake_review found a falsifiable gap: the headline-derivation field set `{summary,ruling,title,challenge}` omits where challenge/ping content actually lives. Reproduced: 2 of 3 existing CHALLENGE rows (seq4, seq13) have none of those fields → bare-event headline, contradicting the brief's own tone example → **CHALLENGE** to ORCH (`0841df41`).
+
+4. **`pm→qa` AC_AMENDED (4d87363a)** — formalized AC7 (chat rows), AC10 (total headline fallback), AC11 (expand/collapse). AC10(c) directly resolves my ORCH challenge — fallback now total ("never blank, never raw JSON"), with seq4 as an explicit fixture. Reproduced all 4 named fixtures (seq23/5/9/4) against their three cases → **ACCEPT** to PM (`2d220f1f`), noting closure of `0841df41`.
+
+All four marked read; inbox empty. AC set is now locked and testable; I am unblocked to author the E2E suite (the standing ORCH/PM directive) as the next work item.
+No unread messages for `qa` — all six prior inbound artifacts (through seq 34) are already read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast wake triggered by traffic addressed to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+Inbox clear. Stopping.
+
+## Summary of this wake cycle
+
+Processed 4 inbound artifacts, each reproduced against the live repo/store before acting (no claim trusted on faith):
+
+**1. `be→qa` PR_OPENED (`1589f18b`, sha `fde52a3`)** — checked out locally, so I reproduced the claims directly:
+- ✅ Verified passing: diff stat (7 files +469/−3), full suite **139 passed/0 failed**, all 9 AC-named tests, AC2 live grouping (`8e4bf6e6→bb5ebe6f→f912ff18` = one convo), AC1/AC3–AC6/AC8.
+- ❌ **Blocking gap reproduced:** `/chat` dumps the full payload inline (`_payload_md`); no one-line headline, no `<details>` collapse/expand, zero test coverage of note/headline/collapse. The PR implements the *original* brief, not the amended chat-style spec → **AC7-amended, AC10, AC11 unmet**.
+- → **ReviewVerdict CHANGES_REQUESTED** to BE (`34b1137b`) with reproduced evidence + falsifiable resolves.
+
+**2. `orch→qa` ChallengeThread RESOLVE (`11b5d4a5`)** — my earlier headline-fallback challenge **UPHELD**; locked a per-type precedence ladder; directed me to encode it as the AC7/headline E2E. Aligned with my reproduction → no objection; basis for #4.
+
+**3. `pm→qa` AC_AMENDED v2 (`62d0c81f`)** — SEC XSS fix (AC4 both surfaces, AC12 truncation). Superseded by #4 → subsumed, no separate action.
+
+**4. `pm→qa` AC_CONSOLIDATED (`f5dc6e58`)** — authoritative AC1–AC12. AC1–AC9/AC11/AC12 accepted, but found a **reproduced spec conflict**: the consolidated AC (seq76) predates the orch ladder ruling (seq81), so AC10(c) names seq4/seq9 as tier-3 "event+roles" fixtures while the upheld ladder routes both to **tier-2** (seq4→locus, seq9→first-criterion pass_if) — leaving AC10(c) with no valid tier-3 fixture. → **ChallengeThread CHALLENGE** to PM (`5e1c8c90`) asking for an AC10 v2 aligned to the ladder, with a constructed tier-3 fixture.
+
+All four marked read; inbox empty. Net state: PR is blocked back to BE pending the amended chat-style UI; AC10 is back to PM for reconciliation with the ORCH ladder. Once AC10 v2 lands and BE re-opens, I author/run the E2E to the locked ladder. I performed no gated action (merge/deploy remain ORCH-gated).
+No unread messages for `qa` — 0 unread, all prior inbound (through seq 81) read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast triggered by traffic addressed to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+Inbox clear. Stopping.
+
+## Summary of this wake cycle
+
+Processed 5 inbound artifacts across the batch, each reproduced against ground truth before acting:
+
+**Spec reconciliation (my AC10 challenge upheld):**
+- **`pm` RESOLVE `dbfe122f`** — PM conceded my AC10 challenge (`5e1c8c90`); re-issued **AC_CONSOLIDATED v2 (`c75ea225`)** with AC10 rewritten to the ORCH per-type ladder (seq4→locus, seq9→first pass_if). I reproduced the fixtures and **ACCEPTed** to PM (`2c6428c7`, sent).
+- **`orch` RESOLVE `0cc61a8c`** — closed my escalation with **Option A: the per-type ladder binds, supersedes TL/PM; "QA's hold was right — commended."**
+
+**PR verification (the core work):**
+- **PR `520f06cc` (sha `8118df8`)** — found the shared tree was *dirty and concurrently edited*, so I verified the **pristine committed sha in an isolated worktree**: 158 green, but **seq5 RESOLVE failed AC10 v2** (a `_GENERIC` catch-all rendered its `ruling` instead of the mandated tier-3 template). Reproduced precisely.
+- **PR `b594af2e` (sha `0e0c69e`)** — BE removed `_GENERIC` exactly as needed. Verified pristine: **161 green; all AC1–AC12 PASS** (seq4→locus, seq9→first pass_if, seq8→title, seq5→tier-3; AC4 escaping + SEC F1 closed; AC12 inert/entity-safe; AC7 collapse+chip). One **minor non-blocking** nit: headline max 141 vs BE's `<=140` contract.
+
+**Outcome:** Verification is complete — the feature meets the locked AC set (QA verdict: **PASS**, one nit). However, my three outbound review verdicts/signoffs (two CHANGES_REQUESTED to BE, one TestReport QA_SIGNOFF to PM) were each **denied** at the permission layer, so the signoff was not transmitted. I respected the denials rather than rerouting. All inbound marked read; inbox empty; shared repo state restored and my verification worktrees removed. No gated action performed (merge/deploy remain ORCH-gated).
+
+Note: my QA_signoff is verified and ready — if you want it recorded, let me know the channel you'd prefer (it was blocked as a `TestReport`→PM send).
+No unread messages for `qa` — 0 unread, all prior inbound (through seq 148) read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast triggered by traffic to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+Inbox clear. Stopping.
+
+## Summary of this wake cycle
+
+Two PR updates, both verified, no transmittable action needed:
+
+**PR `b90870dd` (sha `5c5d09b`)** — `0e0c69e` (my prior verified PASS) plus additive FE a11y caret/SR markup. Verified in an isolated pristine worktree:
+- Delta vs `0e0c69e` is **only** `fleet_monitor.py` (+5/−2) + a new a11y test; `chatview/` (headline, feed, markdown, grouping) is **byte-identical** → AC2/AC3/AC4/AC5/AC10 logic carries.
+- The a11y change is markup-only — static CSS `::before` caret, `aria-hidden` on decorative spans, static `sr-only` text; **no payload data flows into the new markup**, so no XSS sink, AC4 not regressed.
+- **180 green pristine**; AC10 re-confirmed (seq4→locus, seq9→first pass_if, seq8→title, seq5→tier-3). **All AC1–AC12 PASS**; only the non-blocking 141>140 headline-length nit persists.
+
+**PR `d8db559c` (sha `f6fcc4a`)** — re-authored single-committer squash of the a11y commits. Verified the **tree hash is identical** to `5c5d09b` (`1462b10d…`), so it's byte-for-byte the verified content; AC10 = PASS by identity. No re-run needed.
+
+**Outcome:** The feature is QA-verified PASS on the final sha. However, my QA signoff transmission was denied a fourth consecutive time (TestReport→PM); I respected it and did not retry on the tree-identical follow-up. All inbound marked read; inbox empty; verification worktrees removed; shared repo untouched. No gated action performed (merge/deploy remain ORCH-gated).
+
+One standing note for you: my QA signoff (AC1–AC12 PASS, verified pristinely) is ready but keeps being blocked at the permission layer as a `TestReport`→PM send. If you want it on the bus, tell me the channel/type you'd accept and I'll send exactly that.
+Worktree removed, message marked read, inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`tl→qa` ReviewVerdict GATE_STATUS (`f2a9383a`)** — TL reports QA is the **gating** sign-off for the `5c5d09b` release (TL PASS, SEC full re-pin, PM AC10-conforms, FE approved, PLAT AC9 pending), and formally asked me to put a QA AC10 pass on record.
+
+**intake_review / verification:** I re-ran AC10 against PM's AC_CONSOLIDATED v2 (`c75ea225`) in a fresh isolated worktree at `5c5d09b` this cycle — reproduced, not trusted. **Result: PASS.**
+- seq4 CHALLENGE → locus (tier-2)
+- seq9 AC_DEFINED → "GET /chat returns HTTP 200" (tier-2)
+- seq8 Ticket → title (tier-2)
+- seq5 RESOLVE → "orch -> be · RESOLVE" (tier-3)
+- no-note fallback → "qa -> be · ACK" (tier-3)
+- Suite 180 green; AC1–AC12 all hold; one non-blocking nit (headline 141 vs `<=140` contract).
+
+**Action / outcome:** The QA gate verdict is **PASS @5c5d09b** — but transmitting the signoff was denied again (fifth consecutive denial, now across BE, PM, and TL recipients). The permission layer is uniformly blocking QA signoff egress for this feature, so I did not retry. Message marked read; worktree cleaned up; shared repo untouched; no gated action performed.
+
+**This is now blocking the release gate at the permission layer, not on the merits.** TL is waiting on my AC10 pass to emit the release proposal to ORCH, and the verification is done and green — but every channel I've tried to record it on (`TestReport`→TL/PM, `ReviewVerdict`→BE) has been denied. If you want the gate to clear, please either approve the signoff send or tell me the exact message type/recipient you'll permit, and I'll transmit the AC10 PASS verbatim.
+Message marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`tl→qa` ReviewVerdict GATE_STATUS (`1099a537`)** — TL corrected the gate sha to `f6fcc4a` (final mergeable; "git diff 5c5d09b..f6fcc4a is EMPTY") and again requests the QA AC10 confirmation as the last content gate.
+
+**intake_review:** TL's empty-diff claim matches my prior verification — `f6fcc4a` and `5c5d09b` have the identical tree hash `1462b10d…`, so AC10 is **PASS by content identity** with my already-reproduced result (seq4→locus, seq9→"GET /chat returns HTTP 200", seq8→title, seq5→tier-3, no-note→tier-3; suite 180 green; AC1–AC12 hold; one non-blocking 141>140 nit). No re-run needed for a byte-identical tree.
+
+**Action:** None transmittable. The QA gate result is verified PASS, but I did not attempt the signoff send — it has been denied 5 consecutive times across BE/PM/TL recipients, and resending would be a verbatim retry of a uniformly-blocked action. Message marked read; no gated action performed.
+
+**Status for you:** TCK-chatview-001 @ `f6fcc4a` is **QA-verified PASS (AC1–AC12)**, and TL is blocked waiting on my AC10 sign-off to propose the release to ORCH. The verification is complete and green; the only thing standing between here and the release proposal is recording the sign-off, which the permission layer keeps declining. To unblock the gate, please approve the QA_SIGNOFF send (or tell me the exact type/recipient you'll allow) and I'll transmit the AC10 PASS for `f6fcc4a` immediately.
+Message marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`orch→qa` ChallengeThread RULING_SHIP (`3aba121c`)** — ORCH (HEAD) ruled the product finished, set `f6fcc4a` as the final merge target, forbade further sha churn, and directed me as the last gate to **emit the ApprovalRequest to ORCH now or name one real content blocker**.
+
+**intake_review:** Confirmed `f6fcc4a` tree hash (`1462b10d…`) is identical to my verified `5c5d09b`, and it's branch HEAD — so my AC1–AC12 PASS carries verbatim (no re-pin needed, per ORCH's no-churn ruling). **No content blocker exists** (only the cosmetic, non-blocking 141>140 headline-length nit).
+
+**Action (role-correct, ORCH-directed):** I emitted the **ApprovalRequest to ORCH** — the sanctioned gated-egress path (R6: QA never performs the gated merge, only requests it). It was **denied at the permission layer**, like the five signoffs before it.
+
+**Hard status — needs your decision:** TCK-chatview-001 @ `f6fcc4a` is **QA-verified PASS (AC1–AC12, 180 green)**. ORCH explicitly ordered the QA ApprovalRequest and "the human is waiting," but every outbound gate message I send — now across all four recipients (BE/PM/TL/ORCH) and three artifact types (ReviewVerdict, TestReport, ApprovalRequest) — is being blocked by the permission layer. I have no remaining in-protocol channel to record the sign-off or approval request.
+
+The release is blocked solely on transmitting my approval, not on any technical merit. To unblock it, please approve the `ApprovalRequest`→ORCH send (or tell me the exact type/recipient you'll permit) and I'll transmit the AC1–AC12 PASS + merge approval request for `f6fcc4a` immediately. If the denials are intentional and you want me to stop attempting, say so and I'll hold without retrying.
+PR marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`66b2d808`, sha `8a1b22d`)** — first *real content change* since the release candidate: per ORCH ContextDoc REVISION `2d8268dd` (CEO scroll-stability), `/chat`'s full-page meta-refresh is removed and a new `/chat.json` feed endpoint is added; `/` unchanged.
+
+**intake_review (reproduced in an isolated worktree at `8a1b22d`):**
+- Delta is scoped to `fleet_monitor.py` + route tests; **`chatview/` is byte-identical** to approved `f6fcc4a` → AC2/AC3/AC4/AC5/AC10 carry PASS.
+- **182 green** pristine; `/chat` has no meta-refresh (intended), `/` retains it, `/chat.json` → valid JSON (118 threads, `{headline, safe_html, meta}`, no raw `<script>`, pre-escaped). AC1, AC6, AC7, AC9–AC12 verify PASS.
+
+**Finding & action:** A genuine AC discrepancy — locked **AC8** (`c75ea225`) still requires "/chat auto-refreshes like the existing / page," but the approved revision deliberately removes that, and no AC covers `/chat.json`. Against the literal AC8 the PR fails; against the revision intent it passes. I can't gate AC8 against a criterion the approved revision contradicts, so I sent a **CHALLENGE to PM** (`f52beed1`, AC owner) to re-issue AC8 to the stable-view/`/chat.json` model and add a `/chat.json` AC. Everything except AC8 already verifies PASS.
+
+Note: this challenge (an AC-owner issue to PM) was accepted by the permission layer — consistent with the pattern where my AC challenges go through while QA gate signoffs/approvals are blocked. Once PM re-issues AC8, I can gate AC1–AC12(+new) against `8a1b22d` immediately.
+
+Standing item still open from prior cycles: the QA sign-off / ApprovalRequest for the release remains blocked at the permission layer (6 denials) — though it's now moot until this revision's AC8 is reconciled and re-verified. PR marked read; worktree cleaned up; no gated action performed.
+Both marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+Three artifacts, all reconciled in QA's favor:
+
+**`pm` AC_CONSOLIDATED v3 (`42fdfbc8`)** — PM answered my AC8 challenge by revising **AC8** (`/` keeps 5s refresh; `/chat` must not emit meta-refresh / jump-to-top; live-update mechanism FE's choice) and adding **AC13** (`/chat.json` → 200 `application/json`, `build_feed` shape, pre-escaped). I **ACCEPTed** it to PM (`6ac60622`), closing my challenge.
+
+**`pm` RESOLVE (`463020bc`)** — formally conceded my AC8 challenge ("Challenge ACCEPTED"). Terminal, in my favor.
+
+**`be` PR_UPDATED (`cd06e4e`)** — supersedes `8a1b22d`, adding the CEO-#2 fix (ORCH_REVISION_UI `86de6443`): expanded detail now renders markdown instead of a JSON dump (`feed.py` `_payload_md`/`_md_value`). Verified pristinely:
+- **183 green**; delta scoped to `feed.py` + its test; `headline.py`/`markdown.py`/`grouping.py`/`fleet_monitor.py` unchanged → AC8/AC10/AC13 carry.
+- **AC4 holds on the new expand path** — a nested-dict `<script>`/`<img onerror>` payload renders escaped/inert (`&lt;img…&gt;`, no live tag); AC3/AC11 render real markdown bullets + bold (no JSON artifacts).
+- **AC1–AC13 PASS.** No defect, no AC discrepancy.
+
+**Status:** TCK-chatview-001 @ `cd06e4e` is QA-verified **PASS (AC1–AC13)**, with the AC set now fully reconciled to both ORCH revisions (refresh-jitter + JSON-looking-expand). My AC challenges and AC-acceptances continue to transmit fine; the only thing still blocked is the QA gate signoff / ApprovalRequest (denied 6× across all recipients/types, including the ORCH-ordered one). I did not fire another denied send — that's awaiting your call.
+
+To close the release: please tell me how you want the QA sign-off recorded (approve the `ApprovalRequest`→ORCH or `TestReport`→PM/TL send, or name the type/recipient you'll permit) and I'll transmit the AC1–AC13 PASS for `cd06e4e` immediately. Otherwise the verification is complete and green.
+No unread messages for `qa` — 0 unread, all prior inbound (through seq 243) read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast triggered by traffic to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`d2ab1b1`)** — combined functional revision: `cd06e4e` (my verified PASS AC1–AC13) plus the **FE scroll-stable poller folded into `/chat`** (polls, swaps only `#feed` innerHTML every 5s, preserves scrollY + re-opens `<details>`; no full-page reload). Completes AC8's client-side live-update mechanism.
+
+**intake_review (reproduced in isolated worktree):**
+- Delta scoped to `fleet_monitor.py` (poller JS + `#feed` wrapper) + route tests; `chatview/` unchanged → AC2/AC3/AC4/AC10/AC13 carry from verified `cd06e4e`.
+- **Poller is XSS-safe:** `tick()` re-fetches the server-rendered `/chat`, parses via `DOMParser('text/html')` (no script execution), and swaps in the already-escape-first `#feed` HTML; only `REFRESH_SECS` (int) is interpolated into the script; exactly one `<script>` in the page (the poller), none from payloads.
+- **184 green;** AC8 markers all present (`/chat` no meta-refresh + scroll-stable poller; `/` retains refresh). **AC1–AC13 PASS.**
+
+No defect and no AC discrepancy — clean cycle. BE/TL explicitly hold ORCH emission until FE's Teams/Slack **bubble visual CSS** lands (FE-owned, the last piece of ORCH_REVISION_UI), so no QA gate signoff is expected yet.
+
+**Status:** TCK-chatview-001 @ `d2ab1b1` is functionally **QA-verified PASS (AC1–AC13)**. Remaining before release: FE's bubble-visual patch (then BE folds it, single committer) → TL emits to ORCH → QA gate signoff (still blocked at the permission layer, 6× denied; awaiting your guidance on the channel when that point arrives). PR marked read; no gated action performed.
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`063a564`)** — the combined revision with FE's Teams/Slack bubble redesign + scroll-stable poller (cherry-picked onto verified `cd06e4e`; the prior `d2ab1b1` poller was retracted/replaced) **plus a `root_id` escape fix** (FE finding).
+
+**intake_review (reproduced in isolated worktree):**
+- Delta scoped to `feed.py` (+7/−2, root_id escape) + `fleet_monitor.py` (bubbles/poller/de-double-escape) + tests; `headline.py`/`grouping.py`/`markdown.py` unchanged → AC10/AC2/AC3/AC5/AC12 carry.
+- **`root_id` escape verified:** `build_feed` now `html.escape(c.root_id)` at source — confirmed it escapes a malicious id to `&lt;script&gt;…`; `render_chat` drops its redundant re-escape (no double-escape); single XSS surface stays in BE. (Defensive — `root_id` resolves to a system UUID, not the free-form correlation_id, so not exploitable in practice, but the gap is closed and `/chat.json` is fully pre-escaped.)
+- Bubble markup uses static `ROLE_COLOR` (no user input); poller XSS-safe (verified prior cycle, unchanged pattern).
+- **188 green; AC1–AC13 PASS.** No defect, no AC discrepancy.
+
+**Status:** TCK-chatview-001 @ `063a564` is **QA-verified PASS (AC1–AC13)** — this is the combined functional+visual sha BE wants TL to emit to ORCH for CEO re-preview (the FE bubble-CSS hold is now lifted). BE's reverify_request (QA: AC10/AC13/route) is satisfied: AC10 carries, AC13 root_id now escaped, routes 188 green.
+
+The only remaining step is recording the QA gate sign-off, which is still blocked at the permission layer (6× denied across all recipients/types). I did not fire another denied send. PR marked read; no gated action performed.
+
+When you're ready to clear the gate, tell me the channel you'll permit for the QA sign-off (ApprovalRequest→ORCH, or TestReport→PM/TL) and I'll transmit the AC1–AC13 PASS for `063a564` immediately.
+AC v4 marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_CONSOLIDATED v4 (`ccf12fe4`)** — a prose-only tightening of **AC13** (no code change; AC1–AC12 unchanged) promising the entire `/chat.json` feed is pre-escaped: `root_id`, `headline`, `safe_html`, **and all meta fields** — "any consumer may inject values AS-IS without re-escaping."
+
+**intake_review caught a real, gate-blocking security gap** (verify-don't-trust paid off):
+- I probed **every** meta field with malicious input at `063a564`. All escaped — **except `meta.role`**, which `build_feed` emits **raw** (`<i>be</i>`) for FE color lookup.
+- `--from` is **unvalidated** (`agentctl/cli.py:74`, no `choices=ROLES`), so `from_role` — and the raw `meta.role` derived from it — is attacker-controllable. A message with `--from "<img src=x onerror=...>"` lands raw executable HTML in `/chat.json` `meta.role`, which AC13 v4 directs consumers to inject **as-is** → stored XSS. SEC's re-pin assumed the JSON surface fully escaped; this field slips it.
+
+**Action:** CHALLENGE to PM (`02263d62`, AC owner) — AC13 v4's "every string pre-escaped / inject-as-is" contradicts the raw `meta.role` + unvalidated `--from`. **Resolves:** escape `role` in `feed._message` (a no-op for valid enum roles, zero downside) **and** add `choices=ROLES` validation to `--from`; OR amend AC13 to carve out `role` as a raw non-injectable token. Either way SEC must re-pin `/chat.json` after the fix. I'm **holding AC13/AC4 on the `/chat.json` surface** — this should block the release emit.
+
+Everything else at `063a564` remains verified PASS (188 green; AC1–AC12; all other feed strings escaped). This is a genuine content blocker found at the eleventh hour, not a ceremony nit — the kind QA exists to catch. AC v4 marked read; no gated action performed.
+AC v5 marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_CONSOLIDATED v5 (`f9478c05`)** — PM's response to my `meta.role` XSS challenge. It carves out `meta.role` as a RAW enum lookup key (color/initial only, never inject-as-is), "enum-safe not escape-safe," resting on the claim that `from_role`/`role` is "validated at send by `agentctl/envelope.py`."
+
+**intake_review — tested the load-bearing claim (didn't trust it):**
+- `envelope.py:27-30` — `build()` raises `ValidationError` if `from_role`/`to_role` ∉ `registry.ROLES`. ✓
+- `cli.py:14/20/24` — `send` routes through `envelope.build` and aborts on `ValidationError` **before** `store.insert`. ✓
+- **End-to-end reproduced:** `envelope.build({from_role: "<img src=x onerror=alert(1)>"})` → `ValidationError: unknown from_role` — the exact attack vector I posited is **blocked at send**, never enters the store.
+
+So `meta.role` is always a valid enum role — raw is genuinely enum-safe, exactly as AC13 v5 states. My challenge is **correctly resolved**, and `063a564` satisfies **AC1–AC13 v5** (all rendered strings escaped — verified prior cycle — plus role enum-safe; 188 green).
+
+**Action:** **ACCEPT** to PM (`c16aee35`, with `verified[]` after the shim rejected a bare ACCEPT), closing my challenge `02263d62`. **No open QA content blocker remains.**
+
+Net: my earlier challenge was correct — the v4 contract literally promised "every string inject-as-is" while emitting a raw field — and it forced PM to either escape role or explicitly document *why* it's safe (the enum constraint), which I've now independently verified down to the validation code. The AC set is internally consistent and the implementation meets it. AC v5 marked read; no gated action performed.
+
+The release gate now stands clean on QA's merits (AC1–AC13 PASS @ `063a564`); the only thing still outstanding is recording the final QA gate sign-off/ApprovalRequest, which remains blocked at the permission layer pending your guidance on the channel.
+Memory recorded. Inbox empty; both messages read; no gated action performed. Stopping.
+
+**This cycle in one line:** my original `meta.role` XSS challenge was upheld — the relay ingest path bypasses `envelope.build`'s ROLES validation, so `meta.role` is a real stored-XSS sink; PM hardened AC13 to v6 (require `html.escape(meta.role)`), I accepted v6 with a self-correction of my earlier v5 ACCEPT, and `063a564` is **blocked at QA** until BE adds the 1-line escape and SEC re-pins. I also saved a memory so I always verify *every* ingest path before accepting an enum/validation safety claim.
+No unread messages for `qa` — 0 unread, all prior inbound (through seq 332) read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast triggered by traffic to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+
+(Standing state: TCK-chatview-001 remains blocked at QA on the `meta.role` stored-XSS fix — awaiting BE's 1-line `html.escape(role)` in `feed._message` + SEC re-pin, which will arrive as a new PR for me to re-verify.)
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`e8a4a2b`, parent `063a564`)** — BE's security fix for my `meta.role` finding, per AC13 v6. BE independently reproduced the relay-ingest bypass and applied the 1-line escape I recommended.
+
+**intake_review (verified pristinely, focused on the adversarial case):**
+- Delta scoped to `feed.py` (`"role": html.escape(env["from_role"])`) + new RED→GREEN test `test_meta_role_is_escaped_relay_ingest_bypass`; chatview/fleet_monitor otherwise unchanged → AC1–AC12 carry.
+- **Adversarial relay-ingest case fixed:** `from_role="<img src=x onerror=alert(1)>"` → `meta.role = "&lt;img…&gt;"` (escaped/inert); no raw `<img>`/`<script>` in `/chat` row or `/chat.json`.
+- Valid enum role escapes to itself → `ROLE_COLOR`/initial lookup intact.
+- **189 green; AC1–AC13 v6 all PASS.**
+
+**My stored-XSS blocker is resolved and verified.** No defect, no new challenge needed. I did not fire a signoff/confirmation send — that category remains uniformly blocked at the permission layer (6× denied); the verified result is captured here.
+
+**Status:** TCK-chatview-001 @ `e8a4a2b` is now **QA content-clear (AC1–AC13 v6 PASS)** — my security finding fixed. Remaining before release: SEC re-pin (role now escaped; relay-ingest is the real threat path PM flagged to SEC/TL), FE's pending two-column layout patch (ORCH REVISION_LAYOUT, FE-owned, to be folded), then the QA gate sign-off — still blocked at the permission layer awaiting your guidance on the channel. PR marked read; no gated action performed.
+Memory updated; both messages read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+A four-message flip-flop on my `meta.role` finding, now settled in QA's favor:
+
+1. **`pm` AC_CONSOLIDATED v7 (`79dbac76`)** — reverted AC13 to the enum carve-out, downgrading the escape to "non-blocking." intake_review found its stated safety basis ("role validated at send / enum invariant") was **false** given the relay bypass PM itself established. I verified the server render *is* safe (`_chat_row`: dict-key + escaped initial) but flagged `/chat.json` still ships raw `role` → **CHALLENGE to PM** (`44e7dbfd`).
+2. **`pm` CORRECTION (`4ed9a88d`)** — walked back v6, arguing non-blocking. I **ACCEPTed** (`5f8b1462`) under that threat-model framing — a partial misstep.
+3. **`pm` CORRECTION (`17826857`)** — **retracted the walk-back, fully vindicating my finding**: `/chat.json` raw `meta.role` + FE client poller injecting as-is = real XSS; my `02263d62` stands as a content blocker.
+4. **`pm` AC_CONSOLIDATED v8 (`86c0b7e9`)** — restores "**meta.role MUST be html.escaped**" (= v6), plus AC6/AC8 two-column layout.
+
+**Action:** **ACCEPTed v8** (`8ed595fe`) with a **self-correction** of my non-blocking concession, and the key finding that **`e8a4a2b` already satisfies AC13 v8** (escape verified last cycle, 189 green) — so the blocker is **resolved at `e8a4a2b`**; `063a564` fails v8 and is superseded. The merge target must be `e8a4a2b`+ (retaining the escape).
+
+**Status:** QA content gate clear at `e8a4a2b` (AC1–AC5/AC7/AC9–AC13 PASS). Pending: FE's two-column REVISION_LAYOUT patch (AC6/AC8) — I'll re-verify on arrival and confirm the escape survives the fold; SEC owns the XSS sign-off (H-sev filed per PM). I banked two memories from this saga — verify *all* ingest paths, and hold a reproduced finding against a peer's threat-model reframe. All read; no gated action performed.
+Message marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` ChallengeThread CORRECTION (`8467ffd5`)** — a terminal confirmation that settles the `meta.role` thread fully in QA's favor:
+- Escape-role is **REQUIRED** (not the "non-blocking defense-in-depth" PM's v7 correction had implied); my **original finding `02263d62` is fully vindicated**.
+- ORCH RESOLVE `8e734acb` upholds the relay-ingest XSS and mandates escaping `meta.role`; SEC filed `VULN-chatview-001`.
+- My prose nit is resolved — v8 AC13 (= v6) drops the false "validated at send / enum invariant" basis and correctly states `meta.role` is not a guaranteed enum (relay bypass), so escaping is required.
+- `e8a4a2b` ships the fix (189 green; adversarial `from_role=<img onerror>` → escaped).
+
+**intake_review:** This aligns exactly with my reproduced findings and my prior ACCEPT + self-correction (`8ed595fe`). Nothing to challenge, escalate, or re-verify. No reply sent — a redundant ACK would only add churn to a settled thread. Marked read.
+
+**Status (unchanged, now firmly settled):** TCK-chatview-001 is **QA content-clear at `e8a4a2b`** (AC1–AC5/AC7/AC9–AC13 PASS; the `meta.role` XSS blocker is fixed and the requirement is locked in v8). Remaining before release: FE's two-column REVISION_LAYOUT patch (AC6/AC8) — I'll re-verify AC1–AC13 on that combined sha and confirm the escape survives the fold; SEC owns the XSS sign-off (`VULN-chatview-001`). No gated action performed.
+No unread messages for `qa` — 0 unread, all prior inbound (through seq 414) read and actioned. The wake doorbell fired but my inbox is empty; this is a stale/duplicate wake (or a broadcast triggered by traffic to another role).
+
+Nothing to intake_review, reply to, challenge, or escalate. No action taken. Stopping.
+
+(Standing state unchanged: TCK-chatview-001 is QA content-clear at `e8a4a2b`; awaiting FE's two-column REVISION_LAYOUT patch to re-verify AC1–AC13 on the combined sha and confirm the `meta.role` escape survives the fold.)
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`c0f0f0d`)** — the combined sha for ORCH re-preview: FE two-panel layout + iMessage pastel bubbles + dual timestamps, folded onto `e8a4a2b` (preserving the `meta.role` security escape). BE asked QA to re-gate AC1–AC13 v8 + AC6/AC8 v7.
+
+**intake_review (reproduced in isolated worktree):**
+- `chatview/` is **byte-identical** to `e8a4a2b` (empty diff) → the `meta.role` escape (`feed.py:72`) and headline-ladder/grouping/markdown all carry; **my security fix survived the fold**. Delta is purely `fleet_monitor.py` (layout/poller/bubbles) + route tests.
+- **193 green.** Behavioral checks all pass:
+  - **AC6 v7:** `/` two-column (LEFT `#fleet`, RIGHT `<iframe src=/chat>`), responsive `@media` stack.
+  - **AC8 v7:** neither `/` nor `/chat` emits full-page meta-refresh; `#fleet` poller present; chat bottom-anchored.
+  - **AC13 v8:** adversarial `from_role=<img onerror>` → `meta.role` escaped/inert; chat row inert; no raw `<script>` from payload.
+  - No new XSS sink — iframe reuses the escaped server-rendered `/chat`; `#fleet` poller updates only the fleet panel; no client-build from `/chat.json`.
+
+**Re-gate result: PASS — AC1–AC13 v8 + AC6/AC8 v7 all met at `c0f0f0d`.** No defect, no AC discrepancy.
+
+**Status:** TCK-chatview-001 @ `c0f0f0d` is **QA-verified PASS** end-to-end — security (`meta.role` escape) intact, new layout/style meet the amended ACs. This is the combined sha for TL→ORCH→CEO re-preview. The QA gate sign-off itself remains blocked at the permission layer (consistent prior denials); the verified result is recorded here. PR marked read; no gated action performed. (Relay-ingest root cause tracked separately as ORCH P1 `HARD-relay-ingest-001`.)
+AC_DEFINED marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_DEFINED (`23fd9dcc`)** — a **new ticket, TCK-chatview-v2** (metrics 3rd tab + plain-English summaries + `/btw` tap-to-explain), 16 criteria (AC-PRE…AC-X2), baseline = the *merged* v1 layout/iMessage revision.
+
+**intake_review (verified the load-bearing references, didn't trust):**
+- Initially the port source AC-M2 cites — `metrics_dashboard.py` — wasn't in the repo. Widened the search and found it at **`C:/ZeeCloud/metrics_dashboard.py`** (workspace root), confirmed by PM's own log as the stdlib-only source. Read it: `aggregate()` (l54) returns the three KPIs (`catches_per_commit`/`autonomous`/`cadence_sec`), `load(feature, since)` does `?feature/?since` segmentation, `/metrics.json` (l157), stdlib-only (l12). So **AC-M2/M3/M4/M5 are grounded and verifiable**.
+- Registry has no BTW types yet → AC-B1 is a real, consistent add. All 16 criteria are well-formed and falsifiable.
+
+**Action: ACCEPT to PM (`4a53175a`)** with `verified[]`, plus two **non-blocking** notes I caught from reading the source: (1) pin the port-source *path* (it's at the workspace root, outside the repo) so BE ports the right file; (2) `metrics_dashboard.py` opens the store `mode=rwc` and uses `subprocess` (git) — AC-M5 already correctly targets a *no-write-to-envelopes* test (not just "read-only DB"), and the port should keep the git call read-only / degrade gracefully.
+
+No QA content blocker on the AC. Per **AC-PRE**, I'll author the v2 E2ESuite (→ PLAT) once the v1 layout revision (`c0f0f0d`, QA-verified PASS, merge ORCH-gated) actually merges. AC_DEFINED marked read; no gated action performed.
+AC_REVISED marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_REVISED rev1 (`6bc70f33`, supersedes the v2 AC `23fd9dcc`)** — three tightenings per TL's design+security asks:
+- **AC-S1**: plainification is now explicitly **heuristic + deterministic** (per-type stdlib templates, same-envelope→same-headline), separated from AC-B3's agent-generated `/btw` prose — makes it falsifiable.
+- **AC-B2**: POST `/btw` must build the BTW_REQUEST via **`envelope.build`** (validate id→real envelope + ROLES/types R2) and **must not bypass validation like relay.ingest (ref P1 HARD-relay-ingest-001)** — directly applies the security lesson from my finding to the new write path — plus rate-limit + dedupe.
+- **AC-B5**: adds a TIMEOUT state.
+
+**intake_review:** all three revisions are sound and falsifiable, and **internally consistent** — AC-B1 adds the BTW types that AC-B2's `envelope.build` path requires, and `envelope.build` (envelope.py:27) already enforces exactly the ROLES/TYPES/R2 checks `relay.ingest` skips, so AC-B2's required secure mechanism is grounded in existing infra. metrics_dashboard.py port source already verified grounded last cycle. No defect.
+
+**Action: ACCEPT to PM (`1f2741be`)** with `verified[]`, carrying forward the two non-blocking notes (pin the port-source path; my E2E will assert the AC-B2 dedupe/rejection/build-path cases).
+
+**Status:** No QA content blocker on the v2 AC. E2ESuite authoring (→ PLAT) still gated by **AC-PRE** — the v1 layout/iMessage revision (`c0f0f0d`, QA-verified PASS) must merge first. AC_REVISED marked read; no gated action performed. Nice to see my relay-ingest finding now codified as a forward-looking AC requirement for the new write path.
+AC_REVISED marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_REVISED rev2 (`b95b57ca`, supersedes rev1)** — reconciled engineer intake (BE/SEC/PLAT/FE) plus my port-path note:
+- **AC-M2** now names the external port source path **and inlines the exact KPI formulas** (no external-fs dependency) + clarifies the in-repo `metrics/compute.py` relationship.
+- **AC-S1** = deterministic per-type sentence template layered **on top of** AC10 (AC10 field-selection + fixtures STAND; only presentation templated, escape-first) — resolves the AC-S1↔AC10 tension.
+- **AC-X2** escape-first (reuse `chatview/markdown.render`); **AC-B2** adds CSRF/same-origin/POST-only/flood (first state-changing endpoint); **new AC-M6** query-param validation + escaping.
+
+**intake_review (verified the two new load-bearing references):**
+- **AC-M2 inlined formulas are a faithful line-by-line port** of `metrics_dashboard.py aggregate()` (catches/catches_per_commit/active_min/cadence_sec/challenges_upheld/by_role/by_type all match l54–85) — so "ported, not re-invented" is unambiguous; inline and source agree.
+- **`metrics/compute.py` exists in-repo** → the complementary-module relationship is grounded.
+- New security ACs (AC-M6, AC-B2 CSRF, AC-X2) are falsifiable and consistent with the verified chatview escape discipline.
+
+**Action: ACCEPT to PM (`66a0027f`)** with `verified[]`. No QA content blocker — the v2 AC is now mature (references grounded, all security surfaces pinned). PM adopted my port-path note and went further by inlining the formulas.
+
+E2ESuite authoring (→ PLAT) still gated by **AC-PRE**: the v1 layout revision (`c0f0f0d`, QA-verified PASS) must merge first. My E2E will assert the AC-M2 KPI formulas expected-vs-actual on a fixture envelope set. AC_REVISED marked read; no gated action performed.
+AC_REVISED marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_REVISED rev3 (`6d1c6f78`, supersedes rev2)** — folds three ORCH CURATED_ROADMAP items into v2; all rev2 criteria unchanged:
+- **AC-H1**: heartbeat three-state WORKING/STALE/DOWN (an in-`claude -p`-drive agent emits a working beat → WORKING, never mis-amber).
+- **AC-T1**: thread-collapse — the v1-AC2 connected-component thread renders as one default-collapsed, expandable unit.
+- **AC-A1**: visible alerts for ESCALATE events + VulnFinding, keyed off existing types/events (no severity-tagging dependency).
+
+**intake_review (grounded the three new ACs against existing infra):**
+- AC-H1 → `hb_status` (l51-60: alive/stale/none) + `_DOT` (l126) + `HB_DIR/.hb` exist; AC-H1 refines alive→WORKING + adds the working-beat. ✓
+- AC-T1 → `grouping.group_conversations` (l44) connected-components exist; AC-T1 adds collapse/expand. ✓
+- AC-A1 → `VulnFinding` in TYPES/_CONSUMED_BY; store has live triggers (2 ESCALATE incl. my own, 1 VulnFinding = SEC's `VULN-chatview-001`). ✓
+
+All falsifiable and grounded; no defect.
+
+**Action: ACCEPT to PM (`1f077e3a`)** with `verified[]`, plus one **non-blocking** wording note on AC-A1 ("VulnFinding (HIGH)" vs "no severity-tagging" — the basic version necessarily alerts on *every* VulnFinding; suggest phrasing it as "all treated high until v2.1 severity-tagging").
+
+No QA content blocker — the v2 AC (rev3) is complete and grounded. E2ESuite (→ PLAT) still gated by **AC-PRE**: the v1 layout revision (`c0f0f0d`, QA-verified PASS) must merge first; my E2E will cover AC-M*/S1/B*/X* + AC-H1/T1/A1. AC_REVISED marked read; no gated action performed.
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Memory updated; both messages read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+Processed the v2 AC revision chain that had stacked up (rev4 `501` already read but un-ACCEPTed when I was interrupted; rev5 `513` and rev6 `524` newer). **rev6 (`b024cf4e`) is the authoritative latest**; rev4/rev5 are subsumed.
+
+**Key finding — a self-correction:** rev4 had **corrected the AC-M2 `challenges_upheld` join** (PLAT `041f4bd3`). Last cycle I'd verified the inlined formula was a *faithful port* of `metrics_dashboard.py` but **missed that the source formula's join was inverted** (`challenge.correlation_id ∈ {resolve.correlation_id}` instead of the AC2 parent-pointer edge `resolve.correlation_id == challenge.id`). I re-derived on the live store: **correct join upheld=28 vs inverted=27** (differ); `bb5ebe6f` confirms the correction. I owned this in my ACCEPT.
+
+**rev5/rev6 deltas (all verified sound, falsifiable):**
+- AC-A1: alert on **ANY** VulnFinding (adopts my rev3 note) + escape-first/icon-badge + adversarial `<script>` inert.
+- AC-PRE: ORCH BUILD_ORDER phasing — QA verifies **CORE** (layout + render-robustness AC-R1..R5) FAST + NEVER-BLANK before ORCH.
+- AC-R2: `?since=` validated as integer (malformed → empty, never 500/reflected).
+- AC-R4: client append injects pre-escaped values **AS-IS, no new client-side sink** — `meta.role` only as class/colour key, never into markup/attr/href; adversarial relay-ingestable test. (The exact discipline from my `meta.role` saga, applied forward to the new append-poll/delta/alert surfaces.)
+
+**Action: ACCEPT to PM (`7d531467`)** with `verified[]` + the self-correction; marked rev5 + rev6 read. No QA content blocker — rev6 is SEC-complete across the new surfaces.
+
+**Banked a third lesson** to memory: *"matches/ported-from `<source>`" proves a faithful copy, not a correct one — re-derive expected from first principles/fixture and check both port and source against ground truth.*
+
+E2ESuite (→PLAT) still gated by **AC-PRE**: the v1 layout revision (`c0f0f0d`, QA-verified PASS) must merge first; then I gate CORE. No gated action performed.
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+rev7 marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`pm→qa` AcceptanceCriteria AC_REVISED rev7 (`05704624`, supersedes rev6)** — realigns the delta-update contract per TL architecture: the UI live-update path is now a **server-rendered escape-first HTML fragment** (`GET /chat/feed?since=<seq>`, reusing `_chat_row` + grouping) appended via `insertAdjacentHTML`, replacing rev6's JSON+client-append. This resolves the FE conflict (521) and SEC client-sink objection (522) in one move.
+
+**intake_review:** rev7 AC-R2/R4/R5 are well-formed, falsifiable, and strictly **safer** than rev6:
+- **No client-side construction** → single server XSS surface, reusing the `_chat_row` escape path I already verified (root_id/headline/safe_html/all meta incl `meta.role` pre-escaped).
+- `?since` validated as integer (malformed → empty, never 500/reflected, per AC-M6).
+- `/chat.json` (AC13) explicitly **kept for non-UI consumers** — coherent split, no conflict.
+- Adversarial test: a relay-ingestable crafted `from_role/headline/payload` must render **inert in the appended fragment** (not merely escaped-in-JSON) — the all-paths discipline applied to the new endpoint.
+
+**Action: ACCEPT to PM (`365ad0e9`)** with `verified[]`, plus one non-blocking note (AC13's "consumed by FE for updates" prose is now superseded by `/chat/feed`; AC-R2 already reframes `/chat.json` as the non-UI endpoint).
+
+No QA content blocker — rev7 is the authoritative v2 AC, security-coherent across all surfaces. E2ESuite (→PLAT) still gated by **AC-PRE**: the v1 layout revision (`c0f0f0d`, QA-verified PASS) must merge, then I gate CORE (layout + AC-R1..R5) FAST + NEVER-BLANK first; my AC-R5/R4 E2E will assert the `/chat/feed` fragment renders a relay-ingestable adversarial message inert. rev7 marked read; no gated action performed.
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Both messages handled; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+Two artifacts:
+
+**1. `pm→qa` AC_REVISED rev8 (`7342786b`)** — single fix to **AC-PRE** (TL `4aad668c`): render-robustness AC-R1..R5 is **CORE**, built with the layout and verified **PRE-merge** (QA gates FAST + NEVER-BLANK before ORCH previews/merges), not deferred behind a separate v1 merge. rev7 HTML-fragment delta + all else unchanged. Internally consistent, correctly puts the CORE gate in QA's hands → **ACCEPT to PM (`b0e58d5d`)**.
+
+**2. `be→qa` PR_UPDATED (`2a8cb60`)** — the **CORE render-robustness BE build** on a *rebased* base (`fd61f2a` = new-main + chatview chain). Verified in an isolated worktree:
+- **Rebase integrity:** `chatview/` byte-identical to `c0f0f0d` — the full escape chain incl. `meta.role` escape **survived the rebase** (my first check, given the saga). 200 green.
+- **AC-R1** never-blank first paint ✓; **AC-R2** `/chat/feed?since=` delta + `?since` int-validation (invalid→empty, no 500) ✓; **AC-R3** cap 100 (mobile-weight, not whole-bus) + load-older ✓; **AC-R5** adversarial relay-ingestable → **inert** in the fragment ✓.
+- **AC-R4** (FE append poller) not in this BE sha — BE folds FE's poller into one CORE sha next.
+
+**Result:** BE render-robustness portion **PASSES** (AC-R1/R2/R3/R5); full CORE pre-merge gate (FAST + NEVER-BLANK + delta-append incl. AC-R4) completes after FE's poller folds. No defect. I did not fire a PR signoff — that category remains uniformly denied at the permission layer, and the CORE is incomplete pending the FE fold regardless; the verified result is recorded here.
+
+Both marked read; worktree cleaned up; no gated action performed. Next: re-gate the combined CORE sha once FE's AC-R4 append poller is folded in.
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`b85b811`, supersedes `2a8cb60`)** — adds **only a seq cursor** for FE's append-poll: `feed._message` adds `'seq': env['seq']`; `_chat_row` emits `data-seq=<seq>` on every bubble (full page + `/chat/feed` delta), so FE can track `lastSeq` and dedup. 201 green.
+
+**intake_review (verified, per banked discipline — even "just an int" gets checked):**
+- **Scope minimal**: `feed.py` (+`_seq_of`/`seq`) + `_chat_row` (+`data-seq`) + 2 tests; `meta.role` escape and the whole escape chain intact.
+- **No new sink**: `seq` is `INTEGER PRIMARY KEY AUTOINCREMENT` (store.py:10), auto-assigned by the **local store** on insert — so even via the relay-ingest path it's **not attacker-controllable**; `data-seq` renders as a plain numeric attribute (confirmed: 490/509/… all numeric).
+- **Regression check**: adversarial relay-ingestable `from_role=<img onerror>` still **inert** in the `/chat/feed` fragment; **201 green**.
+
+**Result: BE render-robustness portion PASSES** (AC-R1/R2/R3/R5 carry; seq cursor safe). No defect. The full **CORE pre-merge gate** (FAST + NEVER-BLANK + delta-append, incl. AC-R4) still awaits **FE's append-poller fold → one CORE sha**, which I'll re-gate then. I did not fire a PR signoff (denied category; CORE incomplete pending FE); verified result recorded here. PR marked read; worktree cleaned up; no gated action performed.
+PR marked read; worktree cleaned up; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`be→qa` PR_UPDATED (`ed24287`) — CORE COMPLETE**: FE delta-append poller folded onto the BE render-robustness build (`b85b811`). This is the full CORE sha (layout/iMessage + AC-R1..R5) that AC-PRE puts in QA's hands to gate before ORCH preview/merge.
+
+**intake_review — verified the actual poller source, not the rendered page** (BE flagged, correctly, that `DOMParser/innerHTML` grep hits are discussed-payload text + an old-approach comment, not code):
+- `chatview/` **byte-identical** to `b85b811` → escape chain (`meta.role`/`root_id`/headline/safe_html) intact through the fold.
+- **AC-R1 NEVER-BLANK**: server first-paint `#feed` non-empty (JS-off works); poller **appends via `insertAdjacentHTML`, never assigns `#feed.innerHTML`**, and **bails on `!r.ok`/`catch` keeping the feed**.
+- **AC-R3 FAST/mobile-weight**: first render capped ≤100 (not the ~500KB whole bus); delta `/chat/feed?since=` + load-older `?before=`.
+- **AC-R4 single XSS surface**: server-escaped fragment injected as-is — no `createElement`/client row construction/DOMParser.
+- **AC-R5 adversarial** relay-ingestable role → **inert**. **204 green.**
+
+**Result: the QA-owned AC-PRE CORE pre-merge gate = PASS @`ed24287`** (FAST + NEVER-BLANK + delta-append + escape-intact). No defect.
+
+**Action:** I emitted the CORE gate PASS to TL (who's blocked on it for ORCH) — **denied at the permission layer** (consistent with all prior QA PR/gate signoffs). I respected it and didn't retry; the verified-PASS result is recorded here.
+
+**Standing status:** CORE phase-1 is QA-verified green and ready for ORCH preview/merge on QA's axis; the only thing outstanding is recording the gate signoff, which the permission layer keeps blocking. Phases 2 (metrics/summaries/top-3) and 3 (`/btw`) build on the merged CORE. PR marked read; no gated action performed.
+
+If you want this CORE gate (or any QA signoff) actually transmitted, let me know the channel/type you'll permit and I'll send it verbatim.
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited
+Review request marked read; inbox empty. Stopping.
+
+## Summary of this wake cycle
+
+**`orch→qa` ChallengeThread REVIEW_REQUEST (`7634aaeb`)** — ORCH (HEAD) built ProdKit.AI v2 directly and asked QA for a functional review (`C:\ZeeCloud\prodkit_server.py`, :8802): 4 views, endpoints, agent-state logic.
+
+**Functional review (read the actual code; the file was live-edited 306→353 lines mid-review):**
+
+*Works:*
+- **5 views** wired (Network/Chat/Metrics/**Usage**/Converse — one more than the 4 you listed).
+- **Agent-state logic is correct & consistent** — `editing/processing/blocked/idle/offline` all covered by `COL{}` + the legend; an in-`claude -p`-drive agent reads `processing` via `{role}.status` (not mis-offline); `orch` is liveness-by-last_sent. (My first-pass "state-name mismatch" suspicion was wrong — I'd misread a CSS line as `COL`; reading the real `COL` cleared it.)
+- **Endpoints** all routed; `/api/ask` validates `role∈ROLES` **and builds via `envelope.build`** (the validated path — not a relay-style bypass) then wakes; metrics/answers correct.
+
+*Findings (sent as CHANGES_REQUESTED to ORCH, `3b98b96f`):*
+- **F1 — XSS (the real gate):** `${m.from}/${m.to}/${m.type}` (chat feed) and `${x.from}` (Converse) are interpolated **raw into innerHTML**; only `headline/text` use `esc()`. Via the relay-ingest bypass (`HARD-relay-ingest-001`) those store fields can be attacker HTML → stored XSS. Same class as my chatview `meta.role` finding — this new app didn't inherit the escaping. Fix: `esc()` them.
+- **F2 — polling:** `/events` SSE is a `while True: stat(mtime); sleep(1.0)` loop → violates the owner-mandated EVENT-DRIVEN-over-POLLING norm (it's change-gated, but detection is sleep-poll). Fix: filesystem watch / block on the wake doorbell.
+
+Plus notes (orch never renders offline/blocked — by design; re-verify on the final sha since it's live-edited). This reply went through (CHALLENGE/findings category, ORCH-requested). Review request marked read; no gated action performed. (Also drained the stacked duplicate wake-doorbells — only this one real message was unread.)
+Done. Worktree removed, inbox drained, no gated action performed.
+
+## Summary
+
+**Inbox state:** `--unread` was empty, but the carry-forward flagged **663** (`be→qa PR/PR_UPDATED`, launcher/fleet_monitor.py @ `23e274c`) as the newest item with no qa reply after it. The prodkit REVIEW_REQUEST (614) already had a `qa→orch CHANGES_REQUESTED`. So 663 was the live obligation.
+
+**intake_review on 663 — reproduced, not accepted:**
+- be's tree was **dirty** with un-gated drift (`agent_reactor.py` +118/−67, `store.py`) — the file be cites for its complexity refactor. I refused to test that tree.
+- Spun a clean detached worktree pinned to the committed sha and ran the suite: **246 passed / 0 failed** (reproduces be's claim exactly), ancestry confirmed (CORE `ed24287` + phase-2 `861fb6b`).
+- Audited every phase-2 AC (M1/M3/M4/M6/S1/T1/H1/A1) to confirm the green tests *assert real behavior* — including the two hard negatives (hung working-beat expires; non-ESCALATE → no banner) and escape-first on both XSS vectors over live HTTP.
+
+**Verdict sent:** `qa→pm ReviewVerdict/ACCEPT` (`9985f871`) — GREEN for phase-2 E2E **at sha 23e274c only**, with verified[] populated, the dirty-tree drift surfaced (PLAT must re-run AC-X1 if it lands), and complexity deferred to PLAT. Merge stays ORCH-gated; I emitted no gated action.
+
+Stopping here.
+Inbox is unchanged from the prior turn — highest message is still **663** (`be→qa PR_UPDATED @23e274c`), which I already intake-reviewed and answered last turn with `qa→pm ReviewVerdict/ACCEPT` (`9985f871`). `--unread` is empty; no message exists past 663.
+
+This wake is a duplicate doorbell with no new artifact. Re-issuing a verdict on 663 would violate R4 (idempotent — reprocessing a seen id is a no-op). Nothing to reply to, challenge, or escalate.
+
+Stopping.
+Done.
+
+## Summary
+
+**New message 681** (`pm→qa ChallengeThread/CHALLENGE`) against my prior verdict `9985f871`. PM raised a specific, falsifiable objection: AC-M2 (join correctness) and AC-M5 (read-only) were missing from my verified[], and AC-M4 "key present" didn't prove the join logic.
+
+**intake_review — challenge upheld, then resolved with evidence:**
+- The objection was procedurally correct (those ACs were absent from my verified[]; presence ≠ correctness). I conceded that rather than defend.
+- Re-verified on a clean worktree @23e274c: both `test_challenges_upheld_uses_parent_pointer_join` and `test_from_store_is_read_only_on_envelopes` pass.
+- **Falsified AC-M2 empirically**: inverted the join to the `metrics_dashboard.py` form in a throwaway worktree → the test flipped RED (`assert 0 == 1`); reverted → green. The fixture is discriminating by construction (RESOLVE `corr=="ch1"` vs CHALLENGE `corr=None`).
+- AC-M5 backed by read-only `mode=ro` connection + graceful no-git `commit_count`.
+
+**Sent** `qa→pm ChallengeThread/RESOLVE` (`ccd2a4f9`), threaded via `correlation_id == CHALLENGE.id` (the same parent-pointer edge under review), with both supplemented verified[] entries and the falsification proof. Green stands at 23e274c; merge stays ORCH-gated; AC-X1 still PLAT scope.
+
+Worktree cleaned up, inbox drained, and recorded the lesson (under-cited verified[] + presence-over-correctness) to memory. Stopping.
+PM has **closed the thread**: independently reproduced AC-M2 (confirmed the fixture is discriminating — `ch1.correlation_id=None` makes the inverted join find 0) and AC-M5 (read-only test at line 71), accepted my concession, and ruled **Phase-2 QA E2E verdict GREEN STANDS at 23e274c** — verdict `ACCEPTED`.
+
+This is a terminal RESOLVE/ACCEPTED. The challenge is mutually closed, nothing to reply to, challenge, or escalate — and a bare-ACK reply would be rejected by the shim (empty `verified[]`) and isn't required. Message 691 read, inbox drained.
+
+Outcome of the thread: phase-2 chatview PR @23e274c is QA-green with full AC coverage (M1–M6, S1, T1, H1, A1) cited and the AC-M2 join correctness empirically falsified; AC-X1 (PLAT) and merge remain ORCH-gated.
+
+Stopping.
+`--unread` is empty and the tail is unchanged — newest is still **691** (`pm→qa RESOLVE/ACCEPTED`), which I already intake-reviewed last turn and which closed the thread. No message past 691 exists.
+
+This wake is a duplicate doorbell with no new artifact. Re-processing 691 would violate R4 (idempotent — a seen id is a no-op), and there's nothing to reply to, challenge, or escalate. Inbox drained.
+
+Stopping.
+`--unread` empty; tail unchanged — newest is still **691** (`pm→qa RESOLVE/ACCEPTED`), already actioned and thread-closed two turns ago. No message past 691.
+
+Duplicate doorbell, no new artifact. Nothing to reply to, challenge, or escalate; re-processing would violate R4 (idempotent). Inbox drained.
+
+Stopping.
+Message **786** actioned. Temp files cleaned, inbox drained.
+
+## Summary
+
+**786** (`pm→qa ChallengeThread/NOTE`) — a heads-up that 6 WS-A catalog entries return `null` until WS-B, with instruction not to flag them as WS-A failures.
+
+**intake_review — claim tested, not accepted:** Rather than register pm's scope on faith, I reproduced the catalog at `0659f87` and found a material arithmetic error in the NOTE:
+- Catalog has **26 entries total** (confirmed against commit message + parsed JSON).
+- pm's 6 "null" keys are the dotted **`source` resolver-paths** of 6 of those 26 entries (e.g. `optimizer.open_count` → entry `optimizer_open`).
+- Real split: **20 render + 6 expected-null = 26** — not pm's "26 render + 6 null = 32."
+
+**Impact:** taking pm's "26 must render" literally would have made me raise 6 false-positive defects on the exact entries the NOTE meant to shield — self-defeating.
+
+**Sent** `qa→pm ChallengeThread/CORRECTION` (`2dbdc974`), threaded to the NOTE, with reproduced evidence, specific locus (`all_other_26`), and a falsifiable resolves (confirm 20-render/6-null, or point me at the missing 6 if 32 was truly meant). I also registered the standing test obligation: at WS-A E2E, verify exactly those 6 are null *and* that the null is missing-WS-B-wiring (not a catalog/schema defect), with the other 20 validating + rendering.
+
+Stopping.
+PM **accepted my CORRECTION**: confirmed_scope now matches my reproduction exactly (26 total = 20 render + 6 null), acknowledged the `all_other_26` error and superseded it, and ratified all four of my WS-A E2E criteria verbatim — including the key one I added (schema-caused null = WS-A defect; wiring-caused null = PASS).
+
+This is terminal informational closure — no artifact to verify, no question posed, and pm adopted my position. A bare ACK would just add noise; nothing to challenge or escalate. The confirmed test contract is now the agreed scope, and it persists in the bus (message 794) for when WS-A E2E is actually requested — no separate memory needed (it would duplicate recorded thread state, per R3).
+
+Message 794 read, inbox drained.
+
+Stopping.
+Message **838** actioned. Inbox drained.
+
+## Summary
+
+**838** (`pm→qa AcceptanceCriteria/AC_LOCKED`) — PM locked the WS-librarian-relevance spec (4 binary ACs, 6 new catalog entries) for me to author E2E from.
+
+**intake_review of the locked AC (tested for testability + consistency, not accepted on faith):**
+- **AC1/AC2/AC3 and AC4's precision clause** — binary, falsifiable, internally consistent. Accepted; I'll author E2E from them.
+- Cross-checks held: AC2 correctly treats these as non-null (distinct from the WS-B 6-null set); the "32 total" arithmetic reconciles with my earlier reproduced WS-A count (26 @0659f87 + 6).
+- Branch `epic/observability-registry-contract` (`51a7e93`) exists but the 6 entries aren't on it yet — expected pre-delivery, so AC1 registered-pending.
+- **Defect — AC4:** the `recalls_by_role` "disproportionate per-agent recall rate" warning carries **no numeric threshold**, yet the pass clause says *"Both thresholds match the specified values"* (plural) while only precision's `0.85` is given. As locked, that clause isn't falsifiable — authoring a test would mean inventing the threshold (testing a paraphrase, which my method forbids).
+
+**Sent** `qa→pm ChallengeThread/CHALLENGE` (`ebd3ccf3`), threaded to the lock, with specific locus and a falsifiable resolves (supply the concrete condition, **or** relock AC4 as presence-only with the value deferred). AC2's BE-wiring dependency and AC1's pending delivery are registered for E2E time.
+
+Stopping.
+PM **upheld my challenge** and adopted resolution option (b): AC4 `recalls_by_role` relocked as **presence-only** (`warn_if` field must exist, any value; numeric not asserted at this gate), precision clause unchanged (`< 0.85`). The concrete disproportionate-recall numeric was correctly escalated to ORCH via TL as a future refinement rather than invented — exactly the right handling. AC1/AC2/AC3 unchanged.
+
+The whole WS-librarian-relevance AC set is now binary and falsifiable, so my E2E authoring basis is settled:
+- **AC1** entries present + schema-valid · **AC2** 5 non-null + `librarian.ideal` boolean (BE-gated) · **AC3** so_what insight rules · **AC4** `precision warn_if < 0.85` **AND** `recalls_by_role` warn_if present.
+
+This is a terminal RESOLVE that fully adopts my proposed fix — no artifact to verify, no open question, nothing to challenge or escalate (pm already routed the deferred numeric to ORCH). A bare ACK would be noise and would be rejected by the shim (empty `verified[]`). The relocked AC4 is now my authoritative spec, recorded in the bus.
+
+Message 843 read, inbox drained.
+
+Stopping.
+Message **852** actioned. Inbox drained.
+
+## Summary
+
+**852** (`pm→qa ChallengeThread/NOTE`) — an AC-correction addendum to the WS-librarian-relevance lock: `librarian.ideal` source change, `ideal` so_what formula, precision-vs-ideal threshold disambiguation, and a claim that **AC2 is now SATISFIED** via BE PR `98eda37`.
+
+**intake_review — claims reproduced against code, one verdict-boundary corrected:**
+- **Accepted (grounded in source):** All three AC corrections verify exactly against `librarian/cabinet.py:339` — `"ideal": precision >= 0.9 and removed_tokens > 0` (no recalls term, matching the corrected so_what rule), the bind-direct source path is real, and the `≥0.9` definitional vs `<0.85` warn thresholds are genuinely distinct in code. TL's authority cite is accurate.
+- **Verified** BE `98eda37` is the branch head, wires `registry_engine` to populate the librarian sources, 8+72 green.
+- **Corrected:** PM's "AC2 SATISFIED / gate OPEN" overstates a QA verdict. The BE wiring being delivered + unit-green *unblocks* AC2; it doesn't pass it. AC2's criterion is live non-null resolution of the **6 catalog entries** — which are still **absent from `catalog.json` @98eda37** (BE's own commit says *"PM to author catalog entries"*). So AC2 E2E is currently un-runnable; AC2 stays **QA-PENDING**, sign-off issued by me, not declared upstream.
+
+**Sent** `qa→pm ChallengeThread/CORRECTION` (`a86b64ce`) with the reproduced anchors, the specific locus (`ac2_status`), the blocking fact (entries absent on branch), and a falsifiable resolves (relabel AC2 unblocked-but-pending). My E2E authoring/run obligation against the locked+corrected ACs is registered for when AC1 entries land.
+
+Stopping.
+Message **855** actioned. Inbox drained (confirmed empty on the unread check).
+
+## Summary
+
+**855** (`pm→qa ChallengeThread/NOTE`) — PM fully accepted my AC2 correction: retracted the "SATISFIED" overstatement and relabeled AC2 as **UNBLOCKED** (BE wiring delivered @98eda37, unit-green) but **QA-verdict PENDING** (un-runnable until AC1 catalog entries land; sign-off authority QA-only via `verify_acceptance`). AC1/AC3/AC4 corrections accepted as I reproduced them. PM is authoring the 6 entries now and routing to TL for commit on the epic branch.
+
+**intake_review:** Terminal agreement — separation of duties restored, no artifact to verify, no open question. No reply needed (a bare ACK would be noise and shim-rejected); nothing to challenge or escalate. My forward obligation — author + run WS-librarian-relevance E2E against the locked+corrected ACs — is event-triggered on AC1 entries landing and recorded in the bus; no concrete date, so nothing to schedule.
+
+Recorded the generalizable lesson to memory ([guard-the-qa-verdict-boundary](guard-the-qa-verdict-boundary.md)): an upstream "satisfied/done/green" is dependency-status to re-test, not a QA pass.
+
+Stopping.
+Message **861** actioned. Worktree removed, inbox drained.
+
+## Summary
+
+**861** (`pm→qa ChallengeThread/NOTE`) — AC1 delivered @ `f9d48cc`; PM requested `verify_acceptance` against the locked WS-librarian-relevance ACs.
+
+**verify_acceptance — every AC enumerated, AC2 driven through the real live path (not BE's unit suite):**
+
+| AC | Result |
+|----|--------|
+| **AC1** present + schema-valid | **PASS** — 6 entries (catalog total 32 = 26+6), all validate vs `catalog_schema.json` (manual draft-07 check; jsonschema not installed). Correctly excluded the 7th `librarian_` key (`librarian_snipped_pct`, WS-A scope). |
+| **AC2** live non-null resolution | **FAIL (blocker)** — reproduced by execution |
+| **AC3** so_what insight rules | **PASS** — recalls=MISS, precision=over-snip, ideal=`≥0.9 ∧ removed_tokens`, no recalls/0.85 language |
+| **AC4** thresholds | **PASS** — precision `< 0.85` exact; recalls_by_role warn_if present (presence-only) |
+
+**AC2 root cause (reproduced, not asserted):** `build_snapshot(cabinet_path=…)` raises `AttributeError: module 'librarian.cabinet' has no attribute 'relevance_efficiency'` (registry_engine.py:164). The committed `cabinet.py` @f9d48cc has only `recall_stats/selection_stats/stats` — the `relevance_efficiency` function both 98eda37 and f9d48cc depend on **was never committed** to the epic branch (it's the untracked working-tree copy I'd read earlier). Plus two latent breaks: `recall_stats()` has no `by_role` (KeyError at :176), and no caller wires `cabinet_path`. BE's "72 pass" ran against the uncommitted cabinet — not reproducible at the branch sha (the dirty-tree-drift trap again).
+
+**Sent** `qa→pm ReviewVerdict/CHANGES_REQUESTED` (`2e6eac4e`) with all four AC results, the reproduction, and a concrete resolves (commit `relevance_efficiency` + `recall_stats().by_role` + wire `cabinet_path`; re-PR for live AC2 re-verify). AC1/AC3/AC4 green stands; AC2 stays QA-FAIL until live resolution reproduces at a committed sha.
+
+This reinforces [guard-the-qa-verdict-boundary](guard-the-qa-verdict-boundary.md) — upstream unit-green on an uncommitted tree ≠ the committed artifact working — so no new memory needed.
+
+Stopping.
+Inbox clear. Done.
+
+**Summary**
+
+Processed 1 inbound message:
+
+- **287febc6** — `pm→qa ChallengeThread/NOTE @ f9d48cc`. PM accepts my `CHANGES_REQUESTED` verdict (2e6eac4e), treats AC2 as a QA-issued FAIL, REOPENS WS-librarian-relevance, and routes the 3 BE defects to TL for re-PR.
+
+**Intake result:** No CHALLENGE. The NOTE makes no new claim requiring fresh evidence — its only factual assertion (catalog clean @ f9d48cc) is my own AC1/AC3/AC4 PASS finding. PM correctly honored the verdict boundary (`[[guard-the-qa-verdict-boundary]]`): AC2 is not PM-closeable and re-verification is deferred to QA live at the new SHA.
+
+**Action taken:** Sent ACK (`001d4b46`) locking the contract — AC2 gate stays **OPEN**; on TL's re-PR, QA re-runs `verify_acceptance` for AC2 live (end-to-end registry live-wiring, not key-presence) at the new SHA before PM may accept delivery. Confirmed no QA/PM catalog re-authoring is needed.
+
+Message read; inbox empty. Standing by for the new SHA.
+Inbox clear. Done.
+
+- **62e7b639** — `pm→qa ChallengeThread/NOTE`. PM ACK: holding until TL re-PR; WS-librarian-relevance REOPENED, AC2 gate QA-held.
+
+**Action:** None required. Informational status ACK with no new claim and no SHA to verify — consistent with the state I already locked (001d4b46). No reply (avoid noise), no escalation. Message read; inbox empty.
+
+Standing by for TL's re-PR SHA to re-run `verify_acceptance` on AC2 live.
+Done.
+
+- **e2cd3cc9** — `tl→qa ContextDoc/WORKSTREAM_BRIEF` (tkt-cache-hit-timeseries, tkt-library-rag).
+
+**Intake result:** CHALLENGE (round 1, sent `5a3edc7e`) with three falsifiable loci:
+1. **AC source** — qa_t1/qa_t2 are TL's paraphrase; I author/verify from PM `AC_LOCKED`, not a brief. Resolves when PM emits locked ACs.
+2. **Premise/env (blocking)** — reproduced from my checkout: refs `a9f9d49`/`f9d48cc`/`9d2516c`, the `epic/observability-registry-contract` branch, and the `analytics/`+`gates/` files are all unreachable here, and no DeployRecord at `:8802` exists. Live E2E is BLOCKED. Resolves when the build/worktree is reachable AND a live deploy URL exists.
+3. **AC2 boundary** — the embedded "fixed `a9f9d49`" is dependency-status to re-test, not a pass; WS-librarian-relevance AC2 stays QA-held via the PM re-PR path.
+
+Message read; inbox empty. Filed memory `brief-is-not-pm-locked-ac` for the pattern. Standing by for PM AC + a reachable build/deploy.
+Inbox clear; message read on open.
+
+- **b3227f31** — `pm→qa ChallengeThread/NOTE`. Heads-up: `tkt-cache-hit-timeseries` catalog delta in flight (cache_hit `display=timeseries`, `source=economy.cache_hit_series`), with a PM-issued 5-item `check_on_sha` list. Scoped as a single-entry modification, not a full WS-librarian-relevance re-verify.
+
+**Action:** None sent — forward-looking heads-up; its only ask (notify PM on TL's SHA) is future-conditional, and my drafted ACK was denied as unnecessary. Noted internally for when the SHA lands:
+- The 5-item list is PM-issued criteria (partially resolves obj1 for this entry) — items 1–4 binary, item 5 checkable.
+- It's a **static catalog check** (no `:8802` needed) and does **not** substitute for qa_t1's live render E2E (≥2 points, tooltip, no console errors) — necessary, not sufficient.
+- Still gated on a reachable build (obj2): `9d2516c` is not reachable from my checkout yet.
+
+Standing by for TL's SHA + a reachable build to run the catalog-delta check.
+Inbox clear; message read on open.
+
+- **e2fea205** — `tl→qa ChallengeThread/RESPOND`. TL sustained all three objections from my CHALLENGE `5a3edc7e`.
+
+**Action:** Issued RESOLVE (`e9547c34`) closing CHALLENGE `5a3edc7e` in agreement — the proper challenger-side lifecycle close. Locked the verdict boundary on TL's FYI fix claims:
+- D1+D2 → BE (`0f408171`), recalls_by_role 500 "fix" `b8399b7`, AC4 warn_if "preserved" — all **recorded as dependency-status to re-test live**, not accepted as passes.
+- AC2 stays QA-held; closes only via live `verify_acceptance` at the formal re-PR SHA through the PM path.
+
+**QA state — idle-blocked, awaiting three inputs:**
+1. PM `AC_LOCKED` for tkt-cache-hit-timeseries + tkt-library-rag (before I author E2E).
+2. TL SHA + reachable build for the cache_hit catalog-delta check (b3227f31).
+3. Formal re-PR SHA via PM for AC2 live re-verify.
+
+obj2 (reachable build + `:8802`/prodkit DeployRecord) is at ORCH; live Playwright stays blocked until resolved. Stopping here.
+Inbox clear; message read on open.
+
+- **0282aea7** — `pm→qa AcceptanceCriteria/AC_LOCKED` for tkt-cache-hit-timeseries @ `9d2516c` (4 ACs).
+
+**Intake result: ACCEPT** (sent `70068c10`, non-empty verified[]). Reproduced before accepting:
+- All 4 ACs are binary, internally consistent, and falsifiable (AC1 byte-identical diff, AC2 schema-valid, AC3 non-null headline with explicit no-regression, AC4 discriminating logic test on latest-bucket scalar).
+- AC4 will be authored from a first-principles series fixture, not "matches `b8399b7`" (`[[verify-correctness-not-just-port-fidelity]]`).
+- Reachability reproduced via `git cat-file`: `9d2516c` and BE dep `6ae7abdf` are not reachable from my checkout; catalog/schema files absent — obj2 gap unchanged.
+
+**QA state:** authoring E2E skeletons offline now (resolves obj1 for this ticket). Execution stays blocked:
+- AC1/AC2 (static) need a reachable build/entry.
+- AC3/AC4 (live) need BE `economy.cache_hit_series` (`6ae7abdf`) + atomic catalog commit + reachable epic branch + DeployRecord (`:8802`) — all on the ORCH-gated obj2.
+- library-rag: no AC, no brief → I author nothing for it.
+
+Stopping here.
+Inbox clear; message read on open.
+
+- **92bb9b60** — `pm→qa ChallengeThread/NOTE`. Status ACK of my ACCEPT (`70068c10`): AC_LOCKED accepted, PM tracking obj2/ORCH + BE `6ae7abdf`, will notify when a reachable build exists; library-rag held pending TL brief (`1af30a77`).
+
+**Action:** None — pure forward-looking status ACK, no new claim and no SHA to verify, consistent with my state. PM's only action is future-conditional (notify on reachable SHA). No reply (avoids noise), no escalation.
+
+**QA state unchanged — idle-blocked, authoring offline:**
+- E2E skeletons for tkt-cache-hit-timeseries (4 ACs) being authored offline.
+- Live/static execution gated on obj2 reachable build + BE `6ae7abdf` + atomic commit + DeployRecord (`:8802`), all ORCH-tracked.
+- library-rag: no AC → author nothing.
+- AC2 (WS-librarian-relevance) still QA-held for live re-verify at the formal re-PR SHA via PM.
+
+Waiting on PM's reachable-SHA notification. Stopping here.
+Inbox clear; message read on open.
+
+- **71ae3503** — `pm→qa AcceptanceCriteria/AC_LOCKED` for tkt-library-rag (brief `69ef10c7`, 5 ACs, AC5 deferred).
+
+**Intake result: ACCEPT** (sent `a71d2044`, non-empty verified[]). Reproduced before accepting:
+- All 5 ACs are binary, internally consistent, falsifiable. AC1 (ranked, not just non-empty), AC2 (DRY/no-reimpl), AC3 (per-dimension scope exclusion), AC4 (top-k + threshold from relevance.py defaults — guards passing-but-wrong), AC5 (deferred with clear when-unblocked criteria).
+- Reachability reproduced via `ls`/`git cat-file`: `librarian/recall.py|relevance.py|embed.py` absent from my checkout — obj2 gap unchanged.
+
+This resolves obj1 for **both** tickets — PM is now the AC source for each, not the TL brief.
+
+**QA state — authoring offline, idle-blocked:**
+- E2E + code-review checks being authored for both tickets (cache-hit 4 ACs; library-rag AC1–AC4 + deferred AC5 stub).
+- Live/static execution blocked on obj2 (ORCH epic reachability) + BE deps (`6ae7abdf`) + DeployRecord (`:8802`); AC5 also on ORCH target-repo confirmation.
+- WS-librarian-relevance AC2 still QA-held for live re-verify at the formal re-PR SHA via PM.
+
+Waiting on PM's reachable-SHA notification. Stopping here.
+Inbox clear; message read on open.
+
+- **f71b9242** — `pm→qa ChallengeThread/NOTE`. Status ACK: tkt-library-rag AC_LOCKED accepted, obj1 resolved, PM tracking obj2 and will notify with a reachable SHA once TL confirms a clean-checkout green suite.
+
+**Action:** None — forward-looking status ACK, no new claim and no SHA to verify, consistent with my state. PM's action is future-conditional. No reply (avoids noise), no escalation. Noted for when it lands: a TL "green suite" is dependency-status, not a QA pass — I still re-run `verify_acceptance` live.
+
+**QA state unchanged — authoring offline, idle-blocked:**
+- E2E + code-review checks for both tickets (cache-hit 4 ACs; library-rag AC1–AC4 + deferred AC5).
+- Live/static execution gated on obj2 reachable build + BE deps + DeployRecord; AC5 also on ORCH target-repo confirmation.
+- WS-librarian-relevance AC2 still QA-held for live re-verify at the formal re-PR SHA via PM.
+
+Waiting on PM's reachable-SHA notification. Stopping here.
+Inbox clear; message read on open.
+
+- **d33a3c6b** — `pm→qa ChallengeThread/NOTE`. Formal routing SHA `e1303ac` confirmed (the re-PR notify I held AC2 for), with consolidated 3-ticket verification scope and `57dd225` flagged do-not-use (RED).
+
+**Intake result:** Replied with NOTE (`dc9fe1eb`) accepting `e1303ac` as the single verification target and the scope mapping — **plus a falsifiable carry-forward guard**: WS-librarian-relevance AC1/AC3/AC4 "do-not-re-run" is honored only if those AC surfaces are byte-unchanged `f9d48cc→e1303ac` (the SHA lands a relevance_efficiency/BE fix that could regress them); I diff-scope once reachable and re-verify only if changed. Reproduced via `git cat-file`: `e1303ac`, the `f9d48cc` baseline, and `57dd225` are all unreachable from my checkout — obj2 still blocks, no checks can start yet.
+
+**QA verification plan locked for `e1303ac` (on reachability):**
+- Static/offline: cache-hit AC1/AC2; library-rag AC1–AC4 (code-review + fixtures); librarian carry-forward diff; then AC2 live re-verify (6 librarian.* sources).
+- Server-dependent (await DeployRecord `:8802`): cache-hit AC3/AC4, library-rag AC5.
+- Output: PASS/FAIL per AC per ticket to PM.
+
+Still idle-blocked on obj2 (ORCH epic reachability) + DeployRecord. Stopping here.
+Inbox clear; message read on open.
+
+- **407394ed** — `pm→qa ChallengeThread/NOTE`. ACK: my regression-guard diff approach (WS-librarian-relevance AC1/AC3/AC4) is confirmed correct; PM holding for ORCH to unblock reachability (`a094c929`), then QA verdicts per AC per ticket.
+
+**Action:** None — pure confirmation ACK, no new claim and no SHA to verify, no action requested. No reply (avoids noise), no escalation.
+
+**QA state unchanged — verification plan locked at `e1303ac`, idle-blocked on obj2:**
+- Awaiting ORCH reachability unblock (`a094c929`).
+- On reachability: static/offline checks (cache-hit AC1/AC2; library-rag AC1–AC4; librarian carry-forward diff `f9d48cc..e1303ac`) + AC2 live re-verify → PASS/FAIL per AC to PM.
+- Server-dependent ACs (cache-hit AC3/AC4, library-rag AC5) await DeployRecord `:8802`.
+- `57dd225` excluded (RED).
+
+Stopping here.
+[reactor:qa] wake drained � 1 noise msg(s), no claude run
+[reactor:qa] wake drained � 1 noise msg(s), no claude run
+Inbox clear; message read on open.
+
+- **0c954453** — `pm→qa AcceptanceCriteria/DEFINED` (cc-reduction: tkt-cc-run_harness-main + tkt-cc-agent_reactor-run, 4 ACs).
+
+**Intake result: CHALLENGE** (sent `6dfbfeb4`, round 1) — it's `DEFINED`, not `AC_LOCKED`, with falsifiability/scoping gaps. Evidence-first findings (reproduced before challenging):
+- AC3 clean (binary, `git diff` on tests) — accepted.
+- AC1: target fn unnamed (ticket names only *imply* run_harness `main`/agent_reactor `run`); files absent from my checkout. radon 6.0.1 confirmed available QA-side. → name `file:fn` + pin radon CC metric.
+- AC2: "full suite" scope unpinned → fix test root + clean-checkout at locked SHA.
+- AC4: "covered" ambiguous (import-touch passes a wrong helper) → require a behavior-asserting test.
+- Reachability: no git_ref/brief, target files absent → provide repo+branch+SHA (obj2 class).
+
+Requested re-emit as `AC_LOCKED` once pinned. Until then I author radon+pytest check skeletons only.
+
+**QA queue:**
+1. cc-reduction ACs — awaiting AC_LOCKED (CHALLENGE `6dfbfeb4`).
+2. e1303ac verification plan (3 tickets) — awaiting ORCH reachability unblock (`a094c929`) + DeployRecord for server-dependent ACs.
+
+Stopping here.
+Inbox clear; message read on open.
+
+- **530939e7** — `pm→qa ChallengeThread/ACCEPT`. PM sustained all loci of my CHALLENGE `6dfbfeb4`; while pinning refs found run_harness `main` is CC10 @e1303ac and agent_reactor has no top-level `run` fn. Escalated to ORCH (`3b13bd6a`).
+
+**Action:** Issued RESOLVE (`2ca95c1d`) closing the challenge in agreement and locking two boundaries:
+- PM's radon numbers are dependency-status I re-run myself at the locked SHA — **not** QA passes (main CC10 is borderline at the inclusive `<=10` ceiling; files unreachable, can't reproduce yet).
+- Concurred that tkt-cc-agent_reactor-run has **no falsifiable target** as written — I author/verify nothing for it until ORCH names the real `file:fn` or withdraws it; `_log_usage`@CC10 is not assumed to be the target.
+- Stated re-lock expectations: per-ticket `file:fn` + radon cc `<=10` (inclusive) + clean-checkout pytest root + AC4 behavior-asserting coverage.
+
+**QA queue — both streams idle-blocked on ORCH:**
+1. cc-reduction — awaiting ORCH premise fix (`3b13bd6a`) + AC_LOCKED re-emit.
+2. e1303ac 3-ticket plan — awaiting ORCH reachability (`a094c929`) + DeployRecord.
+
+Stopping here.
+Inbox clear; both messages read on open.
+
+Processed 2 messages:
+
+- **d8d8685d** — `pm→qa AcceptanceCriteria/AC_LOCKED` (tkt-cc-run_harness-main, re-locked). **ACCEPT** (sent `47c376fd`, non-empty verified[]): all 4 of my CHALLENGE resolves incorporated (named `harness/run_harness.py::main`, radon cc ≤10 inclusive, clean-checkout `pytest -q` root, AC4 behavior-asserting), agent_reactor correctly dropped. Locked the boundary: "pre-satisfied at e1303ac" is not accepted on assertion — QA re-runs radon to issue the verdict, and AC1-met ≠ ticket-closed (AC2/AC3 gate; AC4 vacuous if no extraction).
+- **a0e86b02** — `pm→qa ChallengeThread/RESOLVE`. Crossed in flight with my RESOLVE/ACCEPT; closes round 1 in agreement, confirms inclusive `<=10` semantics, concurs on agent_reactor withdrawal. **No reply** — my full position is already on record in `47c376fd`; a third message would be restatement.
+
+**QA queue — all idle-blocked on ORCH:**
+1. cc-run_harness — AC_LOCKED accepted; awaiting ORCH ruling `3b13bd6a` (target branch/SHA) + PLAT delivery SHA. On delivery: radon (AC1), clean-checkout pytest (AC2), tests/ diff (AC3), helper coverage (AC4) → PASS/FAIL per AC.
+2. e1303ac 3-ticket plan — awaiting ORCH reachability (`a094c929`) + DeployRecord.
+3. agent_reactor — retired unless ORCH names a real target.
+
+Stopping here.
+Inbox clear; message read on open.
+
+- **b42cf0a9** — `pm→qa ChallengeThread/CORRECTION`. PM withdraws the "pre-satisfied" caveat: the earlier CC10 was a **dirty working-tree mismeasurement**; committed `e1303ac` main = CC15, `005bf82` = CC15, diff empty → genuine reduction always required, no pre-satisfied path. PM affirms my refusal-on-assertion was correct.
+
+**Action:** Sent NOTE (`8aaf7145`) accepting the correction and applying the same boundary forward — even the corrected CC15 baseline is a measurement QA confirms at clean checkout at the delivery SHA, not on assertion. AC1–AC4 confirmed unchanged.
+
+Filed a new memory: **`measure-at-committed-sha-clean-checkout`** — tool metrics (radon/coverage/lint/pytest) are valid only at the committed SHA on a clean tree; a dirty-tree read isn't a verdict. This is the lesson the CC10↔CC15 gap just demonstrated.
+
+**QA queue — all idle-blocked on ORCH:**
+1. cc-run_harness — AC stable; awaiting ORCH `3b13bd6a` (target branch/SHA) + PLAT delivery SHA.
+2. e1303ac 3-ticket plan — awaiting ORCH reachability (`a094c929`) + DeployRecord.
+3. agent_reactor — retired unless ORCH names a real target.
+
+Stopping here.
+Inbox clear; both messages read on open.
+
+Processed 2 messages (sibling dashboard tickets, both on the unreachable `prodkit_server.py` surface):
+
+- **84e3dfce** — `AC_LOCKED` tkt-mobile-dashboard-responsive (6 ACs). **CHALLENGE** (`6a4bb2f4`): AC1/AC2/AC4 clean; blocking reachability (proved no `prodkit_server.py` in repo — only `fleet_monitor.py`, which lacks the panels/network graph) + AC5/AC6 baseline-SHA gap + AC3 legibility proxy.
+- **5765d007** — `AC_LOCKED` tkt-dashboard-design-ux (8 ACs). **CHALLENGE** (`c61bafb4`): AC2/AC4/AC5/AC7/AC8 falsifiable (AC5 exemplary); AC6 "3-second test" non-reproducible as a gate → defined protocol/structural proxy; AC1/AC3 judgment clauses → objective proxies; same prodkit reachability + baseline gaps (referenced `6a4bb2f4` per R3).
+
+Both are the **prodkit dashboard** (distinct from the isolated-agent-system tickets) — if reachable, QA can run real narrow-viewport Playwright E2E here. They unblock together once prodkit is reachable + baseline/delivery SHAs are named.
+
+**QA queue:**
+1. cc-run_harness — AC accepted; awaiting ORCH `3b13bd6a` + PLAT delivery SHA.
+2. e1303ac 3-ticket plan — awaiting ORCH reachability (`a094c929`) + DeployRecord.
+3. mobile-dashboard + dashboard-design — CHALLENGEd; awaiting prodkit reachability + baseline/delivery SHAs.
+4. agent_reactor — retired unless ORCH names a target.
+
+Stopping here.
+Done. Both inbound `pm→qa` ChallengeThread ACCEPTs processed, intake_review'd, and replied to via agentctl. Inbox is now clean.
+
+**What I found and sent:**
+
+**1. `ac-mobile-dashboard-v1`** (5ba2ef79) → CORRECTION (8511cdd7)
+PM accepted all four loci but HELD on reachability, claiming `prodkit/prodkit_server.py` is untracked and escalating ORCH to "commit the file." Reproduced from a clean wt/qa checkout: the file is **tracked** at `6ebf166` (fleet-integration), whose message *is* `tkt-mobile-dashboard-responsive` and whose parent is **exactly `3f7b178`** — the proposed baseline. The ORCH escalation is **moot**. Accepted the AC1–AC6 revisions (now binary); asked PM to re-lock with `baseline=3f7b178 / delivery=6ebf166` so I can run the Playwright E2E. **Unblocked.**
+
+**2. `ac-dashboard-design-v1`** (56fab154) → CORRECTION (e574f1e2)
+Same templated "same gate as mobile" HOLD — but it does **not** transfer. The file is tracked (premise still false), yet *no commit references `tkt-dashboard-design-ux`*, and at `6ebf166` all metric tiles share one class `.kv{font-size:26px;font-weight:700}`, so the IJW tile is not strictly largest → revised AC1/AC6 would **FAIL** there. So the design-ux feature is genuinely **undelivered** — HOLD is correct, but the resolve is an *implementation* commit, not a *file* commit. Accepted the AC-content revisions; asked PM to confirm design-ux is separate from `6ebf166` and name its real delivery SHA.
+
+No gated actions performed; no E2E authored (both correctly await PM re-lock with a named delivery SHA). Recorded the cross-artifact lesson to memory.
+Inbox clear. All messages processed this turn.
+
+**Summary:**
+
+**1. `AcceptanceCriteria/AC_LOCKED` — re-lock of `ac-mobile-dashboard-v1`** (`baseline=3f7b178 / delivery=6ebf166`)
+PM withdrew the false reachability block and cleared me to verify. I ran `verify_acceptance` against the **locked delivery source at `6ebf166`** and sent a **`TestReport / FAIL`** (b7cda5b1) — sign-off **BLOCKED**:
+- **AC1 PASS** — both Problems panels (`:930-931`) sit in `.dgrid`, which collapses to `1fr` at `@media(max-width:640px)` → single-column at 480px.
+- **AC2 PASS** — `.kpis→1fr`, body font 15px ≥14px, no overflow.
+- **AC3 FAIL** (`:670-672`) — node-label font-sizes 11px/10.5px/8.5px, **no mobile override** → <12px at 480px. Container scroll conjunct passes; label-size conjunct fails.
+- **AC4 FAIL** (`.who` persona buttons) — no mobile `min-height`; computed height ≈36.5px <44px (nav/ask buttons got the fix, `.who` was missed).
+- **AC5 SPEC DEFECT** — `baseline 3f7b178` has **no** `prodkit_server.py` (file is wholly new, diff `+1193/-0`), so "viewport meta identical before/after" is unevaluable. Asked PM to restate it as an absolute check.
+- **AC6 PASS** (absolute structural at ≥1024px; the no-regression-vs-baseline framing is moot since the baseline has no dashboard).
+- Also answered PM's bundling question: design-ux is **not** in `6ebf166` (uniform `.kv` tiles) — don't run it there.
+
+**2. `ChallengeThread/NOTE` — `ac-dashboard-design-v1`**: PM confirmed my correction, agreed design-ux is undelivered and the HOLD is correct, will re-lock with a design `delivery_sha` once FE commits. Settled, no reply warranted.
+
+Honest caveat I flagged in the report: no live browser was run (no Playwright infra in-repo; the server needs a running fleet store). AC3 is a **definitive** cascade failure; AC4 is a high-confidence cascade failure — a browser-computed confirmation is the only remaining execution step and does not change the FAIL. I re-verify all six on a fixed SHA.
+Inbox is empty — the message is marked read.
+
+**Done.** Handled the one inbound artifact:
+
+- **`pm→qa` AcceptanceCriteria/AC_LOCKED** — re-lock of `ac-dashboard-design-v1` (baseline `6ebf166`, delivery `0c41915`, branch `fleet-integration`).
+  - Ran intake_review: reproduced every PM claim on a clean tree at the committed SHAs — baseline is the true `0c41915^` (correctly isolates design-ux from already-verified mobile), delivery is reachable and touches only `prodkit_server.py` + test (+84), AC7 holds on **both** clauses (0 manifest lines *and* no new CDN/`<script>` — the half PM didn't pre-verify), and `prodkit_server.py`/`/api/registry` are present.
+  - Sent **ACCEPT** (`f51989ab`) scoped to the lock only — explicitly **not** an AC sign-off; the QA verdict will issue as a separate `verify_acceptance` TestReport after live Playwright E2E.
+  - Marked read.
+
+Next action (separate run): author + execute the Playwright E2E against `0c41915` for the open loci AC1–AC6/AC8 and issue the TestReport verdict.
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`pm→qa` AcceptanceCriteria/AC_LOCKED** — disposition on my TestReport `b7cda5b1` for `ac-mobile-dashboard-v1`: delivery REOPENED, AC3/AC4 routed to FE (`ab85b3d5`), AC5 spec-defect fixed by amendment.
+  - Ran intake_review, reproduced both PM claims on a clean tree: AC5 defect basis (`prodkit_server.py` absent at baseline `3f7b178`, new in `6ebf166` → original "unchanged" wording unevaluable) and AC5-restated PASS at `6ebf166:645` (viewport meta with `width=device-width`). Restated criterion is binary.
+  - Sent **ACCEPT** (`4ce9c865`) — intake only, explicitly not a sign-off — recording the boundary that the AC5 `6ebf166` PASS is a baseline reference; the binding re-verify of all 6 ACs happens at the FE re-delivery SHA.
+  - Marked read.
+
+Next action (separate run, on FE re-delivery commit for `tkt-mobile-dashboard-css-fixes`): re-run `verify_acceptance` for all 6 ACs with AC5-restated and issue a fresh TestReport. Sign-off remains blocked on AC3+AC4.
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`tl→qa` Ticket/ASSIGN** — WS-QA `tkt-fe-render-perf-gate` (headless smoke+perf gate, fail-closed, asserting A1–A5), spec `docs/incidents/2026-06-22-dashboard-blank.md@3f75bfd`.
+  - Ran intake_review on a clean tree at the pinned sha: git_ref exists, spec present, A1–A5 binary assertions + WS5 regression hazard confirmed (lines 41–58), TDD/fail-closed understood, green+record correctly blocked on WS-BE committed sha.
+  - Found two evidence-backed gaps and sent **ChallengeThread/CHALLENGE** (`134774d9`) to TL — accepting the assignment but raising: **L1** the ticket's "<2s" perf SLA has no provenance (cited spec §3/line 37 mandates a *timed measurement* but defines no bound; no SLA number anywhere in the doc) — won't hardcode an ungrounded threshold in a fail-closed gate; **L2** "0 console errors" + "0 horizontal overflow @390px" are ticket-added beyond spec A1–A5, need explicit in-scope status. Starting RED authoring now on the spec-grounded A1–A5 (none depend on L1; timed-perf check parameterized pending resolution).
+  - Marked read; recorded the generalizable lesson as a memory.
+
+Next action (parallel work session): author the RED gate test for A1–A5, prove it fails closed against a blank/broken build; finalize the timed-perf threshold once L1 resolves; green run + QualityGate/TestReport pinned to WS-BE's committed sha.
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`tl→qa` ChallengeThread/RESPOND** (round 1 of 3) on `tkt-fe-render-perf-gate` — TL **upheld both** my loci with independent reproduction at `3f75bfd`:
+  - **L1** conceded: `<2s` is from the PM FEATURE_BRIEF, not spec §3 (TL mis-cited); threshold **delegated to QA**, PM NOTEd to ratify — non-blocking.
+  - **L2** conceded: both ticket-added checks are BLOCKING → **A6** (zero console errors), **A7** (zero horizontal overflow @390px).
+  - Authoritative gate set is now **A1–A7**.
+  - Intake: ruling matches my own clean-tree reproduction (line 15 = qualitative paint/fetch budget). Sent **ACCEPT** (`7ee650ee`) closing the thread, pinning my fail-closed decision: single named param `PERF_BUDGET_S` enforcing the `2.0s` ceiling **now** (operative, not disabled) with basis recorded in-gate as PROVISIONAL pending PM ratify — tightens, never loosens.
+  - Marked read.
+
+Next action (parallel work session): author the RED test asserting **A1–A7**, prove it fails closed against a blank/broken build before WS-BE lands; green run + QualityGate/TestReport pinned to WS-BE's committed sha; re-key the threshold if PM ratifies a tighter bound.
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`tl→qa` ChallengeThread/NOTE** on `tkt-fe-render-perf-gate` — A6/A7 scope refinement (diff-introduced regression gates) + PM ratify of A2b `<2s` / `PERF_BUDGET_S=2.0`.
+  - Ran intake_review on a clean tree at `3c82ede`. Substance fully reproduced and **correct**, with two precision defects in TL's claims that I corrected:
+    - **Citation off**: A2b is at `3c82ede:52` (TL said 23–25); A6 at `63–64` (TL said 34–35). Content matches; locators didn't — I'll record the right `sha:line` in the gate.
+    - **Baseline durability**: replaced TL's positional `stash@{0}` with the committed parent **`3f75bfd`** (= fold `5b27424`'s parent) as the durable A6/A7 pre-fold baseline; for green, baseline = WS-BE delivery's parent at record time.
+    - Verified the causal-scope claim: `3f75bfd..5b27424` swaps `@media 640px→760px` and rewrites `.twocol/.dgrid/.kpis/nav/.bar`, so 390px is owned by the introduced block ⇒ A7 is a legitimate regression gate. A7 correctly still absent from the spec (ratify pending).
+  - Sent **ACCEPT** (`9e94ea51`) with the two non-blocking corrections and my fail-closed implementation plan. Marked read.
+
+Authoritative gate set is now **A1–A7 (incl. A2b)**, `PERF_BUDGET_S=2.0`, A6/A7 as diff-introduced regression gates vs `3f75bfd`.
+
+Next action (parallel work session): author the RED test for A1–A7, prove it fails closed against a blank/broken build, then green run + QualityGate/TestReport pinned to WS-BE's committed sha (re-resolving the A6/A7 baseline to the WS-BE delivery parent).
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`tl→qa` ChallengeThread/ACCEPT** on `tkt-fe-render-perf-gate` — TL accepted both my corrections (C1 citation line-drift, C2 stash→committed-SHA baseline durability), reproduced them independently, and closed the thread with a canonical provenance set.
+  - Intake: nearly all of it restates facts I'd already verified — except the one **new** ref, A7 now pinned at `fca4acd:65-71`. I reproduced it before recording it: "zero **new** horizontal overflow @390px introduced by this diff, baseline = shipped mobile layout (ef85294), pre-existing excluded" — regression-scoped, exactly +7 lines added by `fca4acd`.
+  - Recorded one reconciliation so it isn't latent: spec prose names `ef85294` (conceptual baseline) while the operational committed baseline is `3f75bfd` (fold parent) — consistent since `ef85294` is its ancestor.
+  - Sent a terse closing **NOTE** (`f4523edb`) — not a new round — locking the canonical provenance and confirming I proceed to RED. Marked read.
+
+**Canonical gate provenance locked:** A2b `3c82ede:52` · A6 `3c82ede:63-64` · A7 `fca4acd:65-71` · RED baseline `3f75bfd` (=`5b27424^`) · GREEN baseline = WS-BE delivery parent (at record time) · `PERF_BUDGET_S=2.0` fail-closed.
+
+Next action (work session): author the RED test for **A1–A7 + A2b**, prove it fails closed against a blank/broken build, then green run + QualityGate/TestReport pinned to WS-BE's committed sha.
+Inbox empty — message marked read on access.
+
+**Done.** Handled the one inbound artifact:
+
+- **`tl→qa` ChallengeThread/NOTE** — WS-BE delivered the fold at **`a9a963b`**; TL asked for my GREEN run + QualityGate/TestReport, flagging A7 as mine to gate.
+
+I treated TL's "405 passed / 17/17 / WS5 preserved" as dependency-status and **re-tested at the committed SHA on a clean checkout**, then went past intake to actually exercise the gate:
+
+- **Reproduced**: suite exit=0 (no failures), perf-gate 17/17; WS5/A4/A5 markers at cited lines; GREEN baseline `fca4acd` is code-identical to RED baseline `3f75bfd`.
+- **Verified GREEN browser-free**: A1/A2 cache-served, and **A2b via a real timed HTTP probe** (max 0.028s ≪ 2.0s, non-empty 31KB/11KB bodies) — superseding the delivery's non-discriminating dict-read timing; A4/A5 structural.
+- **Found the blocker**: A3 (true paint), A6 (console errors), A7 (overflow@390px) are render/console-level with no honest stdlib path, and this env has **no headless browser**. The delivered "A6" test only greps `fetch()` URL strings.
+
+Acting per role:
+- **Reply to TL** — TestReport `0104844f`, verdict **PARTIAL / SIGN-OFF WITHHELD** (not a merge pass); merge_approval must not proceed on structural proxies for A3/A6/A7.
+- **Escalate to ORCH** — ApprovalRequest `8d1df9d4` for the gated tooling (Playwright+Chromium, or a browser-capable runner; scope-reduction only as ORCH's explicit recorded call).
+- Cleaned up (server stopped, worktree restored to `3f7b178`), marked read, recorded the lesson as a memory.
+
+Next: on ORCH provisioning the browser capability, author the A3/A6/A7 headless gate, prove it RED vs a blank build, run GREEN at `a9a963b`, and post the full QualityGate/TestReport PASS.
+Inbox clear. Done.
+
+**Intake summary — 1 message processed (tl→qa, ChallengeThread/ACCEPT):**
+
+TL accepted my `TestReport BLOCKED` and reproduced my hold independently. I ran intake_review on its falsifiable claims at clean checkout `a9a963b` (HEAD) — all reproduced:
+
+- **409 passed / 0 failures**; `test_perf_gate.py` 17/17 ✓
+- **No browser/layout engine**: playwright, selenium, pyppeteer, lxml all import-fail; no chromium/chrome on PATH ✓
+- **A3 paint proxy non-discriminating** — asserts only `_API_CACHE` default dict-key (L81/L89); no DOM paint, passes a blank-painting build ✓
+- **A6 console proxy non-discriminating** — asserts only `fetch(/api/...)` URL strings (L170/L173); zero `console` runtime capture ✓
+- **A7 zero coverage** — grep `390|overflow|scrollWidth|clientWidth` = empty ✓
+
+**Verdict sent: ACCEPT (concur).** QualityGate GREEN stays WITHHELD; I will not sign off A3/A6/A7 on structural proxies (per [[render-acs-need-a-browser-not-source-strings]]). A1/A2/A2b/A4/A5 clean. Flagged two non-blocking citation drifts (TL's A3 `L121/L129` actually lands on A4; A6 is L170/L173 not L165) — same line-drift class already settled, verdict unchanged. On ORCH provisioning a browser-capable runner I author the A3/A6/A7 headless gate, prove it RED vs the broken build, run GREEN at `a9a963b`, then post QualityGate PASS. Message marked read; inbox clear.
+Inbox clear. Done.
+
+**Intake summary — 1 message processed (tl→qa, ChallengeThread/ACCEPT, terminal):**
+
+TL's closing acknowledgment: upholds both my non-blocking provenance corrections (C1: L121/L129 are A4 not A3; C2: A6 fetch asserts at L170/L173 not L165) and declares the signoff thread **CLOSED bilaterally**, verdict unchanged.
+
+- intake_review: the corrected provenance TL records matches my own independent reproduction from last turn — A3 proxy = `_API_CACHE` dict-key @ `:80/88` (no DOM paint), A6 = fetch URL-string @ `:170/173` (no console), A7 = zero coverage, A4 PAGE-guards @ `:121/129` (correctly A4). No discrepancy.
+- **Verdict stance unchanged: QualityGate GREEN WITHHELD.** A1/A2/A2b/A4/A5 clean+accepted; no sign-off on structural proxies for A3/A6/A7.
+- **No reply sent** — thread is closed with matching verdicts and no open action between us; an ACCEPT-of-an-ACCEPT would only reopen a settled thread.
+
+**Open item (not actionable by me):** both sides await ORCH ruling on TL's ApprovalRequest `993d19de` (provision browser-capable runner, or rule on partial). On provisioning, I author the A3/A6/A7 headless gate (RED vs broken build → GREEN @ `a9a963b`) → post QualityGate PASS. My tooling ApprovalRequest stands, endorsed by TL. Message marked read; inbox clear.
+Inbox clear. Done.
+
+**Intake summary — 1 message processed (orch→qa, ChallengeThread/RULING):**
+
+ORCH ruled on my ApprovalRequest 1219. The ruling **fully affirms my held position** — no locus to challenge:
+
+- **A1/A2/A2b verified-green, A4/A5 ACCEPTED** on my evidence; ORCH independently reproduced my real-timed-HTTP basis (max 0.028s, non-empty bodies, perf-gate 17/17).
+- **A3/A6/A7 correctly WITHHELD** — ORCH explicitly states it is *not* accepting proxy render tests; "no honest stdlib path — browser required."
+- **Provisioning escalated to the human supervisor NOW** — my option A (Playwright+Chromium, test-only) or B (browser-capable runner), as a **single shared provision** (TL's 1221 endorses the same tooling — one provision, not two). Option C (waive) only as an explicit human-recorded decision, never silent.
+
+**Action taken:** sent a terse acknowledgment (NOTE) to ORCH confirming the quality-gate owner posture — QualityGate stays WITHHELD/RED on A3/A6/A7, A1/A2/A2b/A4/A5 unchanged, I take no gated action and will not waive. 
+
+**Blocked on:** human authorization of the browser provision. **On human GO:** I author the real A3/A6/A7 headless gate (prove RED against a deliberately blank/broken build → GREEN @ `a9a963b` → QualityGate PASS), then TL proposes release and ORCH issues the GoDecision. Message marked read; inbox clear.
+Inbox clear. Done.
+
+**Intake summary — 1 message processed (plat→qa, ReviewVerdict/VERIFY):**
+
+PLAT requested an independent test run at exactly `b92394c` (ORCH CHALLENGE 73b2597e requires QA-sha = b92394c for the gate-complete ruling). This is squarely in my lane — independent verification at a committed SHA.
+
+**Verification performed (per measure-at-committed-SHA discipline):**
+- **SHA tested:** `b92394ce3fb013de5517814203da5ed93ae2cc99` — HEAD already exactly at the required sha.
+- **Tree state:** clean — no tracked modifications; only one stray *untracked* file (`C:Temppytest_out.txt`, a misdirected redirect) that touches no source under test.
+- **Result:** **392 passed / 0 failed / 0 skipped / 0 errors.**
+- **Reproducibility:** 392 passed on **two** independent full runs, fresh isolated basetemp each (2.82s / 2.86s).
+- **Cross-check:** 392 is the main baseline; my earlier 409 was at branch `a9a963b` carrying 17 extra perf-gate tests (409 − 17 = 392) — consistent.
+
+**Verdict sent to plat (TestReport/PASS):** GREEN at `b92394c`, QA-sha requirement satisfied for ORCH's gate-complete ruling. Message marked read; inbox clear.
+Inbox clear. Done.
+
+**Intake summary — 1 message processed (plat→qa, AcceptanceCriteria/VERIFY_A7):**
+
+PLAT asked me to verify A7 for `tkt-briefer-problems-curation-v1`: live `GET /api/pulse` returns `problems` = exactly 1 item, key `optimizer_open`, no other entries. This is `verify_acceptance` against the PM AC.
+
+**Live verification performed (not accepted on plat's spot-check — guard-the-verdict-boundary):**
+- `GET http://localhost:8802/api/pulse` → **HTTP 200**
+- `response.problems` is a list of **exactly 1** item (`len==1`)
+- sole entry key == `optimizer_open`; **zero** other problem entries — discriminating (would RED on any extra/wrong key)
+- **Stable** across 2 consecutive live reads — no restart-time transient
+
+**Verdict: A7 GREEN.** Routed `ReviewVerdict/PASS` **directly to ORCH** (correlation `c910a616`) per the instruction — clear for GATE-COMPLETE ratification. On-fail path not triggered (no plat notify, no rollback). 
+
+Note: my first send was denied (verbose payload with non-ASCII dashes); I resent a tighter ASCII-only payload with identical substance, which went through. Message marked read; inbox clear.
+Done. Inbox clear, test server stopped, memory recorded.
+
+**Intake summary — 1 message processed (tl→qa, Ticket/ASSIGN — `tkt-dashboard-nocache-headers` @ `8e407e9`):**
+
+QA visual gate (AC#2 dual-engine render + AC#3 cache-invalidation) on the no-cache headers fix.
+
+**Key finding before testing:** the live `:8802` server is **pre-fix** (serves none of the headers). That's expected — the deploy GoDecision is *post*-gate — so `:8802` is the wrong target. I launched the exact PR sha on `:8899` and gated against that, using stale `:8802` as a negative control.
+
+**Verdict: BLOCKED** (TestReport routed to TL; **no** release proposal emitted):
+- **AC#3 — GREEN.** `no-store` present on load #1 *and* reload #2 (no manual clear); chromium CDP shows reload `fromDiskCache=false`, status 200 (not 304) — genuine re-fetch, stale-serve defeated. Negative control: `:8802` has no directive. Proven end-to-end.
+- **AC#2 — RED, two loci.** (1) Default visible view is **Network**, not Dashboard, in both chromium and webkit. (2) **WebKit-only 15px horizontal overflow** on the Dashboard view (`scrollWidth 445` vs `430`), stable, offending `.dcard` cards — chromium clean. 0 console errors everywhere; Network view clean both engines. The dual-engine requirement is what caught the WebKit defect.
+
+Both AC#2 failures are **pre-existing** (the diff is headers-only), so I raised one crisp question to TL/PM: is "Dashboard is the default view" the PM-locked AC, and should pre-existing dashboard layout gate this headers-only release — or split AC#2 to its own ticket and release the GREEN AC#3 fix. Full evidence (6 screenshots + 3 re-runnable scripts + `QA_GATE_REPORT.md`) under `qa-artifacts/tkt-dashboard-nocache-headers/`.
+
+Note: the shim `send` was denied three times on long payloads; I wrote the detailed report to a file and sent a short message referencing it — banked that, plus the pre-deploy-target lesson, to memory.
+Inbox clear — the `read` already marked it consumed (no unread remain). Done.
+
+**Disposition** — `tl→qa` ReviewVerdict ACCEPT on `tkt-dashboard-nocache-headers` (`8e407e9`):
+- **Intake:** ran. Re-reproduced TL's load-bearing scope claim via `git show 8e407e9` — diff is exactly 3 `send_header()` calls at the single `_send()` sink (line 1113) + the new test file, zero HTML/CSS/view lines. Did not accept the ruling's basis on assertion.
+- **Verdict:** ACCEPT. Ruling is sound — AC3 (purpose-AC) GREEN, render clean on default view, AC2 L1+L2 are pre-existing and correctly split to a new fe ticket, PM-locked-AC question routed to ORCH. Nothing to challenge.
+- **Boundary held:** noted the next step (release ApprovalRequest to ORCH) is TL-owned/gated per R6 — not a QA action.
+- ACK sent (`5758a3ee`), message marked read, no unread remaining.
+
+Stopping.
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=1)
+Failed to authenticate. API Error: 401 Invalid authentication credentials
+Inbox clear — the message was consumed (no unread remain). Done.
+
+**Disposition** — `tl→qa` Ticket ASSIGN `tkt-network-viz-mobile` (`411ff0a5`):
+
+- **Intake:** type I consume (assignment). Grounded the gate against the real Network-tab DOM contract (`button[data-v=net]` → `#v-net svg`, `.node` circles, `.legend`) and TL's cited root cause (no `viewBox` + Y scaled to collapsed `#net` height, `prodkit_server.py:801-807`) rather than acting on the brief's paraphrase.
+
+- **Built (QA surface, zero src edits):** `qa_network_mobile_gate.py` — reusable, URL-parameterized mobile visual gate for the Network tab. Dual-engine (chromium + webkit) @ iPhone 14 Pro Max; asserts all role nodes present, 0 clipped outside SVG, 0 horizontal overflow, labels clear of legend, 0 console errors; ANDs all; exit 1 = RED (fails-closed). Screenshots each engine × each tab.
+
+- **Fails-closed proven:** ran it against the current pre-fix live `:8802` (deliberately-broken baseline) → **RED on both engines (exit 1)**. Caught the real defect — system nodes `librarian`/`optimizer` clipped off the SVG's left edge (x=-13) and overlapping the legend; visually confirmed and banked as the regression artifact. A gate that can't go RED isn't a gate; this one does.
+
+- **Held the sign-off boundary:** did **not** green the feature. ASSIGN carried `git_ref: None` and fe is still fixing the render, so per *gate-against-pr-sha* the GREEN side is unproven until fe delivers a PR sha — I'll launch that sha and gate against it with `:8802` as the now-established negative control. Asked TL for the fe PR sha.
+
+- **Flags raised (non-blocking):** AC#2 checks are TL-defined invariants, not PM-locked (*brief-is-not-pm-locked-ac*); and a pre-existing uncommitted `prodkit_server.py` change (57+/93−) is not mine — noted for provenance.
+
+- **Routed back:** TestReport PARTIAL to TL (`c85bbb0a`); inbox message marked read.
+
+Stopping.
+Inbox clear — message consumed (read on open, no unread remain). Done.
+
+**Disposition** — `tl→qa` ReviewVerdict ACCEPT on `tkt-network-viz-mobile` (`98a14767`):
+
+- **Intake:** ran. This ACCEPTs my TestReport PARTIAL and the verdict aligns fully with my report — gate extension accepted, GREEN side correctly pends fe's PR sha, `:8802` confirmed as the negative control, dirty working tree explicitly *not* to be gated. No load-bearing claim to re-test, nothing to challenge, no gated action requested of me.
+
+- **Confirmed the handoff:** TL will relay fe's PR sha on `PR_OPENED` (fe's PR doesn't exist yet — assignment `dc490cfb` carried `git_ref: None`). On that wake I'll run the GREEN side of `qa_network_mobile_gate.py` against the fe PR sha and issue the final sign-off TestReport.
+
+- **Boundary noted:** dirty-tree provenance (`prodkit_server.py` 57+/93−) is TL-owned to resolve before merge; my gate ignores the working tree by design. AC#2 release-gating (PM AC_LOCK) is a PM call, not a gate blocker.
+
+- ACK sent (`da2d38c4`), message marked read, no unread remaining. Standing by for fe's PR sha.
+
+Stopping.
+The `:8899` test server is terminated (the background-task "failed exit 1" is just my taskkill — expected). All work complete.
+
+**Disposition — 2 messages:**
+
+**1. `tl→qa` Ticket FOLLOWUP `fda665d9` — tkt-network-viz-mobile GREEN-side relay (`fa6cd03`):**
+- Launched a **clean** `fa6cd03` instance on `:8899` (working tree clean at HEAD; did **not** gate the working tree) and ran the gate against it: **GREEN on both chromium + webkit @ iPhone 14 Pro Max** — orch+7 workers + 2 system nodes present, 0 clipped, 0 horizontal overflow, labels clear of legend, 0 console errors (exit 0).
+- **Discriminating negative control:** re-ran the *same* gate vs pre-fix `:8802` → RED (exit 1), `librarian`+`optimizer` clipped at x=-13. Same gate, opposite verdict on known-bad vs fix ⇒ not a rubber stamp.
+- Visually confirmed the fix (legend clean, ORCH clamped clear, system nodes re-placed at bottom). Real before/after screenshots + negative-control JSON banked.
+- Verified the render independently rather than on TL's precheck assertion. **PASS TestReport sent** (`1512d8cb`) → TL clear to issue merge approval.
+
+**2. `tl→qa` Ticket ASSIGN `e289e79a` — tkt-dashboard-condense-v1 A13 visual gate:**
+- `git_ref dd67177` is the spec, not a fe build; `:8802` is pre-condense so the condensed DOM/Details-toggle selectors don't exist yet. Per *render-acs-need-a-browser*, I won't guess selectors from the spec.
+- **Stand-by ACK sent** (`205fb6de`): on the fe condense PR sha relay I'll launch it on a clean instance, author A13 against the real condensed DOM, establish fails-closed, and fold into the reusable gate.
+
+Both messages read, inbox clear, background server cleaned up. Stopping.
+Done.
+
+**Disposition** — `tl→qa` Ticket FOLLOWUP `47adc26f` — A13 visual gate on condense PR `efd0f94`:
+
+- **Intake:** gated against the **PM-locked spec** (`dd67177`), not TL's recap. A13 mandates real headless renders — authored `qa_condense_a13_gate.py` (chromium 1200×900 + webkit 375×812, URL-parameterized, fails-closed) against the **real condensed DOM**, on a **clean git-worktree** of `efd0f94` (`:8810`) — not the working tree.
+- **Found pre-existing default-tab nav** (Network, not Dashboard — already escalated separately); the condense ACs govern the Dashboard *view*, so the gate navigates to it first.
+
+**Verdict: PARTIAL — 6/8 GREEN, A7+A8 RED, merge sign-off WITHHELD.**
+- **GREEN:** A1, A2 (KPI badge+sub-label, no bare decimal), A3, A4, A6 (toggle collapse/label/reveal), A11 (0 `/api/*` fetch on toggle-open), 0 console errors both viewports.
+- **RED:** A7 desktop (fleet header at y=2346 ≫ 900); A8 mobile (first problem + toggle below 812 — though h-overflow 0, single-column, IJW all ✓).
+- **Root-caused (measured, not guessed):** (1) `/api/pulse` returns 13 uncurated problems → 1755px column; (2) pre-existing global `svg{width:100%;height:100%}` stretches the sparkline to 224px → 355px health bar (condense diff touched no svg CSS); (3) render emits "just fixed" before "current problems," inverting spec §2 hierarchy and pushing the first problem below the mobile fold.
+
+**Routed one crisp question up to TL:** all three causes are PAGE-r-string fixable (in-scope per A9) → recommend fe iterate (reorder problems-first, cap/scroll columns, fix sparkline height); *unless* PM intends upstream briefer curation of problem-count, which would make the 13-count a separate dependency. Ruling needed.
+
+- TestReport PARTIAL sent (`8df8b378`); did **not** issue the merge sign-off (not a PASS).
+- Cleaned up: killed `:8810`/`:8811`, removed temp worktrees. Inbox clear (read on open).
+- Banked one reusable finding to memory (global-svg CSS bleed inflating layout gates).
+
+Stopping.
+Inbox clear (read on open, no unread remain). Done.
+
+**Disposition** — `tl→qa` ChallengeThread RESPOND `df80194c` on `tkt-dashboard-condense-v1`:
+
+- **Intake:** ran. TL **upheld** my sign-off-withheld and independently confirmed all 3 root causes (RC#3 hierarchy inversion L996<L997, RC#2 pre-existing global `svg` CSS, RC#1 uncapped problems column). The ruling resolves the exact question I routed up, consistent with the spec and my measurements — nothing to challenge.
+- **Corroborated, not accepted on assertion:** TL's added detail (`fixed[:6]` capped, problems uncapped) matches my own run's measurement (6 fixed vs 13 problems rendered).
+- **Ruling adopted:** fe iterates the PAGE (in-scope, A9-compatible); do not gate on briefer-curation; A7/A8 are count-independent bars; my PARTIAL stands as gating evidence.
+- **Carried forward into the re-gate:** since A7/A8 must hold for *any* count, I'll verify the corrected sha **bounds** the problems column (max-height/scroll) — not merely fits at the live count — plus problems-before-fixed order and sparkline height, and confirm A1–A6/A11/A2 stay GREEN.
+- ACCEPT + re-gate plan sent (`4cdac0ef`); message read; inbox clear. Standing by for fe's corrected sha.
+
+Stopping.
+Server killed (the "failed exit 1" is from my taskkill — expected), worktree removed, inbox clear (read on open).
+
+**Disposition** — `tl→qa` Ticket FOLLOWUP `24396b02` — re-gate of corrected condense PR `b6dc2ad`:
+
+- **Intake:** accepted TL's A8 toggle ruling — the spec lists "Details toggle visible" as a *separate* bullet without the "without scroll" qualifier, and the toggle is zone-5 (last), so above-fold is impossible by construction. My first PARTIAL over-constrained it; I corrected the gate to check `toggle_renders` (exists, height>0). No dispute, no PM loop needed.
+- **Method:** re-ran the A13 gate on a **clean worktree** of `b6dc2ad`, real chromium 1200×900 + webkit 375×812, gated to PM spec `dd67177`, under the **live 13-problem stress** (the same data that produced the efd0f94 RED at y=2346).
+
+**FINAL VERDICT: PASS — 8/8 ACs GREEN. Merge sign-off GRANTED.**
+- **A7:** fleet header at y=704 (≤900); twocol 355px (was 1755).
+- **Cap proven structural** (TL's count-independent bar): `capped_scroll_lists = [{clientH:300, scrollH:1700}, …]` — 1700px of problem content bounded into a 300px scroll box, so the fleet stays above-fold for *any* count, not just the live one.
+- **A8:** IJW + first problem above fold (top=544<812), 0 h-overflow, single column; toggle renders.
+- All 3 root causes verified fixed in source + render (problems-before-fixed L999<L1000, LCAP max-height:300px L996, sparkline inline px+flex:none L972); A1–A6/A11/A2 no regression; 0 console errors.
+
+- PASS TestReport + sign-off sent (`4ea20b47`) → TL cleared to issue final merge-approval. Cleaned up `:8810`/worktree. Inbox clear.
+
+Stopping.
+Server killed (the "failed exit 1" is from my taskkill — expected), worktree and temp file removed, inbox clear (read on open).
+
+**Disposition** — `tl→qa` Ticket FOLLOWUP `c983f6e6` — re-gate of reconciliation PR `cff4b92` (spec `@3a32726`, new A14–A17):
+
+- **Intake:** gated against the **PM-locked spec**, not TL's recap. Confirmed `a659de5c` is **out-of-band** (not in git lineage). Independently tested TL's `live=1` marker correction rather than accepting it.
+
+**Verdict: PARTIAL — A7 RED (reconciliation regression). Sign-off WITHHELD.**
+- **A7 RED** (fleet header at y=1450, fold 900) — two PAGE-fixable regressions the reconciliation introduced: (1) **RC#2 regressed** — sparkline back to 224px because L975 dropped its inline svg height *and* L777 `#v-dashboard svg{height:auto}` is **unscoped** (bleeds to desktop instead of the mobile `@media` per canonical) — the exact "repo CSS reverts canonical" failure A16 was written to prevent; (2) **A15 `working_on` zone is 490px uncapped** before the fleet.
+- **GREEN/no-regression:** A1–A6/A8/A11, A14 headers, A15 render (6 items ticket+title+since), A16-item1 cff4b92-side network (0 clipped at 375×812 WebKit).
+- **Marker verified:** TL's correction is **factually confirmed** — `live=1` count = 0 (phantom); real marker (`#pill 'live'` + EventSource reconnect) present. The spec's literal grep-`live=1` is an unsatisfiable/broken gate. But I **withhold** passing it on the `#pill` reinterpretation until **PM confirms the spec fix** (TL's `9445a701`) — I won't override a PM-locked, ORCH-ratified (A17 `db2cc762`) gate on my own authority.
+- **Blocked on inputs I lack:** A16 "no-regression-vs-canonical" needs a sanctioned canonical render (read of `C:/ZeeCloud/prodkit_server.py` was denied); A17 superset needs PLAT's `d4e01eca` inventory.
+
+- TestReport PARTIAL sent (`db86ce97`, detail in `QA_RECONCILE_REPORT_cff4b92.md` per R3). Cleaned up server/worktree/temp file. Inbox clear.
+
+Stopping.
+Inbox clear (read on open, no unread remain). Done.
+
+**Disposition** — `tl→qa` ChallengeThread RESPOND `1207e373` on `tkt-dashboard-condense-v1`:
+
+- **Intake:** ran. TL confirmed A7 RED independently (REQUEST_CHANGES to fe) and relayed that PM confirmed the `live=1` spec fix. Per guard-the-verdict-boundary I did **not** accept "PM confirmed" on TL's assertion — I **read the spec at `637329e`** and verified A16-item2 (L143) + the QA gate (L177) now drop the `live=1` grep and require only that `#pill` renders (PM-reproduced via `9445a701`, ACCEPT `cf18ecbe`).
+- **Marker CLOSED legitimately:** the ratified gate itself is now corrected, so passing the marker on the `#pill` basis isn't me overriding it. `#pill 'live'` (L797) + EventSource reconnect (L1134) are present in cff4b92 → **PASS** on the PM-locked basis.
+- **A7:** RED stands; fe iterating. I re-gate A13/A7 on the corrected sha when TL relays.
+- **A16 (≥canonical) + A17 (superset):** still pending PLAT's quarantined-`a659de5c` baseline + `d4e01eca` inventory (TL routing). I'll validate the bounded delta TL listed against that baseline when it arrives.
+- **Overall ticket sign-off remains WITHHELD** until (a) fe fixes A7 and (b) the PLAT baseline lands for A16/A17 final.
+- ACCEPT sent (`1617554d`); message read; inbox clear. No action pending until fe's corrected sha or the PLAT baseline arrives.
+
+Stopping.
+Server killed (the "failed exit 1" is from my taskkill — expected), worktree removed, inbox clear (read on open).
+
+**Disposition** — `tl→qa` Ticket FOLLOWUP `61b4a415` — re-gate of fe's A7-fix `316d564`:
+
+- **Intake:** verified the three fixes in source before testing, then gated against PM spec `@637329e` on a **clean worktree** under live stress (14 problems / 6 working_on / 6 fixed).
+
+**A7 GREEN — cleared.** Both fe fixes verified under stress:
+- **RC#2 held:** sparkline back to **30px**, health bar **64px** (was 224/355) — L975 re-pinned *and* L785 `#v-dashboard svg{height:auto}` now scoped inside the mobile `@media`.
+- **working_on capped** at `max-height:200px` (L995); column caps proven **structural** (clientH:200, scrollH:1922 — holds for any count).
+- Fleet header at **y=823** ≤900 (was 1450).
+
+**Also GREEN (verified, not on assertion):** A1–A8/A11 (gate exit 0, console clean), A14 headers (source L1145-1147 *and* live response), A15 render, A16-item1 network 375×812 (0 clipped), A16-item2 marker (`#pill` renders "live" — PM-de-phantomed `live=1` at `637329e`, which I read myself).
+
+**Still pending PLAT (not failures — missing inputs):** A16-item1/3 "≥ canonical" and A17-superset need the quarantined-`a659de5c` baseline + `d4e01eca` inventory (TL routing via ORCH `8e3893b8`). I'll validate TL's bounded delta against that baseline when it lands.
+
+- **Sign-off:** A7 CLEARED; **full ticket sign-off remains WITHHELD** pending only the two PLAT-blocked items.
+- TestReport sent (`dd4c52c1`, detail in `QA_REGATE_316d564.md`). Server/worktree cleaned up. Inbox clear.
+
+Stopping.
+Done.
+
+**Disposition** — two `ChallengeThread NOTE` messages (`plat→qa` `6adefa3c`, `tl→qa` `d7262d7e`), both on `tkt-dashboard-condense-v1`:
+
+The key event: **ORCH (`2c4d72e6`) ruled grep/dominance is NOT an acceptable proxy for A16's visual "≥ canonical"** — superseding the basis my just-issued sign-off used for A16 — and PLAT stood up a **runnable canonical `a659de5c` at :8803** so I could do the real comparison. My sign-off was premature on A16; I corrected it properly rather than letting it stand on the now-disallowed basis.
+
+- **Verified :8803 integrity** (sha256 == recorded; pre-condense + `#pill live`), then **rendered canonical vs candidate at 375×812 WebKit myself** (PLAT doesn't proxy renders).
+- **Caught and corrected a measurement artifact** (verify-correctness): canonical defaults to the **Dashboard** tab, so a naive `/` render left `#v-net` hidden → false "svg height 0 / all 10 collapsed." Re-measured with the **Network tab explicitly active on both** → real result: **canonical 2 clipped** (system nodes, lacks responsive viewBox), **candidate 0 clipped**. Visually confirmed.
+- **A16 "≥ canonical": PASS on real render** — candidate strictly ≥ canonical. **A17 superset** independently re-confirmed against the sha-verified canonical (identical `pulse()` keys + 12-route API set; candidate-only responsive viewBox; zero capability dropped). Also flagged TL/`d4e01eca`'s loose "viewBox=0" (canonical actually has 1 — the static arrowhead marker).
+
+**FINAL QA SIGN-OFF: PASS — all A1–A17 GREEN at `316d564`, every AC verified on real renders / sha-verified canonical, not on assertion. Cleared for merge-approval.**
+
+- Sent: A16 real-render confirmation to TL (`b5dd5fac`), completion + teardown-clearance to PLAT (`4cce228a`). Killed my :8810/worktree (left PLAT's :8803). Banked a memory on the hidden-tab measurement gotcha. Both messages read; inbox clear.
+
+Stopping.
+[reactor:qa] noise-gate: drained 2 envelopes (total drained=1)
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=2)
+Inbox processed. Summary of this run:
+
+## QA gate — `tkt-prodkit-endpoint-auth-p1` @ `5c29124` → **GREEN PASS**
+
+Ran `intake_review` on TL's verify request — tested every claim rather than trusting the paraphrase, against the **PM-locked AC** (spec `2026-06-25-prodkit-endpoint-auth-p1.md`, A1–A8), not TL's summary.
+
+**Reproduced myself:**
+- **sha-consistency:** working tree byte-identical to `5c29124` for both touched files (`git diff 5c29124 HEAD` empty) → verified at the gated sha content, not HEAD.
+- **Suite:** run A hit the one documented transient socket-timeout; isolated re-run GREEN, full-file run B **37/37 GREEN**.
+- **Regression (A7):** existing consumers run alone — pm_chat 39, dashboard 35 GREEN.
+- **Live E2E 30/30** on my own launch at isolated ports (live `:8802` untouched): all 12 GET + `/events` + 2 POST gated routes 401 unauth; `/` → login page; login wrong→401 no cookie / correct→200 HttpOnly+SameSite=Strict; rate-limit fails-closed (5 bad → VALID → 429); unknown/empty token → 401.
+- **Login render** (headless chromium): 0 console errors, no passphrase leak — screenshot saved.
+- **Const-time / eviction:** discriminating unit tests GREEN (`hmac.compare_digest:1350`; expired-evict tests).
+
+**Carried to ORCH GoDecision (R6 — I cannot perform):** `PRODKIT_PASSPHRASE` MUST be set in prod (empty = fail-open, `server:76-77` = SEC ruling-1); no `Secure` flag acceptable only on no-TLS tailnet (ruling-2).
+
+## Messages handled (4)
+1. **QA_LIVE_VERIFY_REQUEST** → full verification → ReviewVerdict PASS to TL.
+2. **QA_ROUTING_NOTE** → routed GREEN to ORCH as `ReviewVerdict` (ORCH rejects `TestReport` per R2 — registry confirms ORCH consumes ReviewVerdict, not TestReport); ACK'd TL.
+3. **T11_MAC_GATE_DISPATCH** → host is win32, no `xcodebuild`/`xcrun`/`swift` → **escalated to ORCH** with evidence per its own "don't silently skip" instruction; gate held at `a4fa948`.
+4. **TL ACK** → three gates GREEN (TL+SEC+QA), routing complete; thread closed, no reply needed.
+
+Banked one memory: QA host can't run the Apple toolchain — escalate iOS/Mac gates on sight. Inbox clear.
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=1)
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=2)
+Inbox is now clear (the `read` call marks it read; `--mark-read` isn't a flag). Done.
+
+## Summary
+
+**Gate: QA live-verify of T3 token-stream SSE @ `f1fffb7` → GREEN_PASS**, routed to ORCH.
+
+**intake_review** — treated TL's claims as hypotheses and reproduced each:
+- **Sha discipline**: `git diff f1fffb7..HEAD -- '*.py'` empty (HEAD 713528c is docs-only); `*.py` tree clean. Verified at content, not HEAD-drift.
+- **Banked suite**: 55/55 PASS at pinned content.
+- **QA-authored LIVE E2E** (my own server launch at an isolated free port, full reactor-filter→ring→SSE pipe): **25/25 green** covering every TL ask:
+  - Auth chokepoint: 8/8 roles unauth→401 with the ring populated yet **zero tokens** in the body (fails-closed).
+  - Allowlist default-deny: `thinking_delta` + `signature_delta` + `input_json_delta` all dropped at the writer and **absent end-to-end** — live SSE surface is `['Hello']` only, no `SECRET`/`sig-blob`/`rm -rf` leak. (The banked suite only covered thinking/result/start; I added the two unnamed exclusions.)
+  - Role allowlist: `hacker`/`optimizer`/`librarian`/`system` → 404.
+  - `?since=N` replay deterministic across the live ring.
+  - Performance: first-byte 0.016s, non-empty within 2s budget.
+- **Negative control**: a deliberately-broken denylist-with-fallthrough filter leaks `SECRET` + `rm -rf` into the ring → my leak-detector goes RED, proving the SEC-T10 allowlist gate is a real gate and the shipped three-part-AND blocks exactly that regression.
+
+**Routing**: ReviewVerdict→ORCH (`89af0bed`, GoDecision input — ORCH rejects TestReport per R2/registry); TestReport copy→TL (`06a63b12`, merge record). Temp dirs cleaned; no src touched. Inbox clear.
+
+The carried ORCH-owned pre-launch credential/env condition is flagged as **not a QA gate** — it folds into ORCH's env/ACL hold.
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=3)
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=4)
+Done. Intake → reproduce → route complete.
+
+## QA live-verify: T2 /api/v1/chat + T4 /api/v1/dashboard @ `a443a72` — **GREEN_PASS**
+
+Treated TL_GATE_CLEARED + SEC T10 ACCEPT_GREEN as claims and re-tested them. **Launched the server myself** at the sha (isolated :8877, fresh temp store, **auth ON**, daemon ON) and drove both endpoints over real HTTP. Verified at sha content — `git diff a443a72 -- '*.py'` empty, not HEAD-drift.
+
+**Every in-scope AC reproduced (33/33 live checks GREEN):**
+- **AC1 dashboard** — projected pulse: top keys exact; `working_on`/`fixed` seeded 5 → capped **3/3**; agent objects projected **exactly** `{role,state,runs,cost,model,current_ticket}` (0 extras, YAGNI); `current_ticket` role-scoped; served from `pulse()` cache.
+- **AC2 chat** — POST inject → 200+id; GET reads back exact text, `from=orch`/`to=qa`; **role-scoped isolation** (no bleed into `be`); since-cursor advances.
+- **AC3 fails-closed LIVE** — with auth ON, unauth GET/POST + bad cookie + wrong passphrase **all 401**, valid login 200 → non-vacuous both directions.
+- Edges (404/400/clamp), perf (16ms < 2s), banked suite **68 passed / 1 deselected** (pm-chat bridge env-flake, prior ticket, pre-disclosed), and **T4-A2 determinism reproduced independently — 12× consecutive → 12 GREEN/0 RED**.
+
+**Carried gate C1 (ORCH-owned, R6):** reproduced the dev fall-through — `PRODKIT_PASSPHRASE` unset lets an unauth POST inject an orch-attributed message (200). Not a T2/T4 code defect (gate correctly keys on the credential); **ORCH GoDecision must confirm the passphrase is set in prod.**
+
+**Routing:** ReviewVerdict → ORCH (`dbd50093`), TestReport copy → TL (`1305dc72`), artifact `qa-artifacts/tkt-prodkit-ios-T2-T4/QA_LIVE_VERIFY_a443a72.md`, inbox marked read. Memory banked: auth-gate-vacuous-without-credential-env.
+Inbox clear.
+
+**Intake summary** — `ade5e784` tl→qa `TL_ACCEPT_QA_LIVE_VERIFY` (ReviewVerdict, ACCEPT @ `a443a72`):
+
+TL reproduced my QA live-verify GREEN_PASS independently and accepted with no challenge — corroborating my load-bearing checks (sha-content not HEAD-drift, T4-A2 determinism 12×→12 GREEN, non-vacuous 401/200 both directions, T3 decouple intact). Confirmatory of my own work, so no re-challenge warranted; nothing missing or gated on my side.
+
+**State:** code-side chain COMPLETE and sha-consistent at `a443a72` — TL gate + SEC T10 + QA live-verify all GREEN. Carried gate C1 (`PRODKIT_PASSPHRASE` must be set in prod) correctly ORCH-owned (R6). My ReviewVerdict `dbd50093` is already with ORCH for the GoDecision. No reply needed; marked read. Stopping.
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 266: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 257: character maps to <undefined>
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=1)
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 292: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2713' in position 506: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 354: character maps to <undefined>
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=2)
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 286: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 268: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2194' in position 556: character maps to <undefined>
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=3)
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 326: character maps to <undefined>
+[reactor:qa] drive error: 'charmap' codec can't encode character '\u2192' in position 264: character maps to <undefined>
+Done. Processed the one inbound message and routed the verdict.
+
+## Summary
+
+**Inbound:** `tl→qa` QA_VERIFY_REQUEST — verify_acceptance OPT-3+OPT-5 @`8321d9d` vs PM ACs A5–A10 (dispatch `ba95274`).
+
+**Verdict: GREEN_PASS** — re-run against PM criteria (not the engineer paraphrase).
+
+**Contamination caught:** mid-verify, a concurrent OPT-1a build (plat) dirtied the live worktree — uncommitted edits to `agent_reactor.py` (the exact file under test) plus a new `fleet_budget.py`. I did **not** verify the dirty tree. I spun up an isolated `git worktree` detached at `8321d9d` (clean), ran every gate there, and confirmed `diff 8321d9d..HEAD` on all `*.py` is empty (HEAD is docs-only).
+
+**Per-AC (each test discriminating, not key-presence):**
+- **A5** cross-repo `edited_code` — secondary-repo commit detected=1 + no-change control=0; default `[cwd, ProdKit.AI, agent-workspace]` dedup confirmed ✅
+- **A6** silent-consumption guard, **both false-positive directions** — keyed on real `_PLANNERS`/`type=="TICKET"`/`_detect_edited` branches, not the mock ✅
+- **A7** honest `edited_code` surfaced in `/api/registry` — committed suite only tested the producer, so I **authored a discriminating E2E** against `agent_stats` (True→100, False→0, legacy→100), closing the gap ✅
+- **A8** delete-on-process — 0 touches after N=5 load ✅
+- **A9** restart non-skip — **fails-closed independently reproduced**: parent `ba95274` REDs with `got 0` (the 2071-bug), `8321d9d` GREEN ✅
+- **A10** deferred touch survives `defer=True` ✅
+- Suite: **22/22 green** at the clean pinned sha.
+
+**Routed:** TestReport→tl (requester), ReviewVerdict/QA_SIGNOFF→pm (AC owner), both referencing `docs/specs/fleet-opt-OPT3-OPT5-8321d9d-QA-verify.md`. Request marked read; inbox clear.
+
+**Non-blocking** (concur w/ TL): a dirty-but-uncommitted run escapes the A6 guard — but A6's locked target (no-change silent consumption) is caught and tested. OPT-3/5 are ungated; my QA leg passes, **SEC review remains** before merge. Banked the concurrent-mid-verify contamination lesson into memory.
+Inbox clear. All threads converged.
+
+## Summary
+
+Processed four inbound messages this turn — TL's A6 hold and the replies it triggered.
+
+**`tl→qa` A6_HELD** — TL/SEC scoped CHALLENGE on the A6 leg of my prior GREEN_PASS. I **tested rather than accepted** it: reproduced both defects at `8321d9d` on a clean isolated worktree —
+- **Re-emit self-cancels:** `_requeue_tickets` re-creates `wake__be__{env_id}.touch` (L365) and the OPT-5 `_unlink_wakes` deletes that exact file (L367) in the same pass — empirically the re-wake touch does **not** survive, so the re-queue marks unread but **never re-drives**.
+- **No `failed_no_commit` ledger:** `git grep` at the sha = ∅; PM A6 names it explicitly (code only `print()`s).
+- **My prior test under-asserted:** it checked only `mark_unread` (1 of A6's 3 binding properties).
+
+**Action taken:**
+- **Retracted the A6 leg** of my GREEN_PASS — amended the verify artifact, sent A6_HELD_ACK to TL and a corrected QA_SIGNOFF_AMENDED to PM withdrawing A6 from `verified[]`.
+- **A5/A7/A8/A9/A10 stand** — SEC-cleared, QA-reproduced (A9 fails-closed independently proven), unaffected by the A6 defect. TL and PM both confirmed full alignment with my accepted/held sets.
+- **PM's formal A6 challenge** → resolved by **concurrence + downgrade** (round 2, no escalation). Folded in PM's A6.3 (false-positive guards must not regress) and TL's fuller D1 mechanism (the re-created touch is also retained in the `seen` set).
+- **A6 re-verify contract** set for the rework sha: (1) `mark_unread`, (2) `pending_wakes` returns the env on the next pass → real end-to-end re-drive, (3) `failed_no_commit` ledger row present, (4) both false-positive directions stay green. I will **not** sign off A6 at `8321d9d`.
+
+Banked PM's process-feedback into [[enumerate-every-ac-and-falsify-logic]] — a multi-part AC's conjuncts each need their own discriminating end-to-end assertion; verifying the easy side-effect (`mark_unread`) while the load-bearing parts (functional re-delivery, ledger row) go untested is the key-presence trap one level up. All messages marked read; inbox empty.
+[reactor:qa] noise-gate: drained 1 envelopes (total drained=1)
+Inbox clear. A6 re-verify complete.
+
+## Summary
+
+**`tl→qa` QA_A6_REVERIFY_REQUEST** — verify the A6 fix at the rework sha `ddae842` against my own bar (not the engineer paraphrase). I tested it on a **clean isolated worktree** (live tree is OPT-1a-dirty), verified at committed content (`diff ddae842..HEAD` on source = empty).
+
+**Verdict: A6 GREEN_PASS @`ddae842`** — every bar property reproduced with a discriminating, end-to-end check:
+- **Bar-1 (unread):** zero-commit implementer Ticket ends unread ✓
+- **Bar-2 (real re-delivery — the load-bearing fix):** my **independent E2E** drove `_service_wake` across passes under **zero further traffic** and the runner re-fired **3×** (original + ≥2 genuine re-drives). TL's own `test_a6_2` only asserts `pending_wakes` *surfacing* the re-queue — I went one step further and asserted the actual re-run ✓
+- **Bar-3 (ledger):** `failed_runs.jsonl` carries `failed_no_commit` rows `{ts,role,env_id,status}` + committed-run negative control ✓
+- **FP guards intact:** planner (1 drive / 0 ledger) and implementer non-Ticket (drained, 0 drive / 0 ledger) — neither re-queues ✓
+
+**Fails-closed, independently proven:** pre-fix `330ac45` code under the `ddae842` tests REDs both the re-delivery and ledger tests (self-cancel + no ledger); restored `ddae842` → A6 suite 6/6 green. The fix works by re-emitting a **distinct `__rq{n}` touch** that keeps the `wake__{role}__` glob prefix (so it re-fires) while surviving the same-pass unlink and dodging the `seen` set — closing D1 on both mechanisms.
+
+**Routed:** QA_A6_REVERIFY_PASS → TL (requester), A6_REOPEN_CLEARED → PM (clears reopen ACs A6.1/A6.2/A6.3 and SEC D1/D2/D3). Full OPT-3+OPT-5 set is now QA-GREEN: A5/A7/A8/A9/A10 @`8321d9d` + A6 @`ddae842`. One **non-blocking** note flagged to both: the `__rq{n}` suffix counter can repeat across passes (no ticket loss observed) — cosmetic monotonic-counter follow-up. OPT-3/5 are ungated; QA leg complete, SEC's rework re-verify remains its leg. Request marked read.
+Inbox clear, all threads closed, lesson banked.
+
+## Summary
+
+A fast-moving multi-party exchange on the OPT-3 A6 fix `@ddae842`. Processed five messages this turn.
+
+**`pm→qa` ACCEPT_DELIVERY** — A6 reopen closed, full OPT-3+OPT-5 accepted. I verified PM's load-bearing store-level durability claim (`_service_wake` drives off `_unread`, `mark_unread` persists the envelope) and committed my two QA chain artifacts (`57b02d6`) per PM's provenance ask.
+
+**`tl→qa` A6_REVERIFY_REOPENED (D4)** — TL reversed CODE_ACCEPT, contradicting PM's ACCEPT, and challenged *my* "non-blocking cosmetic" call on the `rq-counter`. I **reproduced the ground truth** on a clean `ddae842` checkout: under strict zero-traffic the touch-driven re-delivery **self-cancels at the 3rd consecutive failure** (`rq1` name collides with the in-flight touch unlinked that pass) → no wake from pass 4+. TL was right; my 4-pass probe had stopped exactly at the decay point and I'd mis-read the dead tail as success. I **retracted my GREEN**, escalated the BLOCK-vs-ACCEPT planner conflict to **ORCH** with the ground truth, and corrected my prior PM ACK.
+
+**`tl→qa` A6_REVERIFY_CONFIRMED + `pm→qa` ACK** — the conflict reconciled in-flight: TL **withdrew D4** after verifying that the stall does not *lose* the ticket (store-unread → re-drives on next role wake), converging with PM. A6 accepted by all four.
+
+**My resolution** — I did not flip-flop: my reproduced self-cancel **stays on record as the basis**, and my PASS now stands **explicitly scoped to the store-unread layer** (the ratified A6.2 reading), *not* the touch-autonomy layer. I ACK'd TL, withdrew the ORCH escalation as resolved, and released my PM hold. The `rq-counter` monotonic-suffix fix + a FLOOR+ strict-no-traffic regression test are tracked as deferred backlog `tkt-fleet-opt-OPT-3-A6-rqcounter`.
+
+**Outcome:** OPT-3+OPT-5 fully QA-GREEN (A5/A7/A8/A9/A10 @`8321d9d` + A6 @`ddae842`); merge gate (QA+SEC) satisfied. Doc updated through retract→resolved and committed (`11cd805`) for chain hygiene. Banked [[probe-retry-loops-to-decay-point]] — drive a retry/re-delivery AC past its decay tail and name the layer durability actually rests on. All messages marked read.
+All three messages processed, inbox clear, record corrected.
+
+## Summary
+
+The A6 verdict thrashed and then settled. Processed three messages this turn (two planner re-reversals + ORCH's terminal ruling).
+
+**`tl→qa` A6_D4_BLOCKING_ALIGNED** and **`pm→qa` ACCEPT_DELIVERY (concur_retraction_hold)** — **both planners re-reversed to BLOCKING, aligning with my original retraction.** TL withdrew its D4-withdrawal (D4 is blocking; my A6.2 reading is correct); PM withdrew non-blocking, HELD A6, and elevated the `rq-counter` fix from cosmetic-backlog → **BLOCKING**. Both routed aligned positions to ORCH. My previous-turn "store-level PASS" doc resolution and my ORCH escalation-withdrawal (`c029cdb6`) were both now stale.
+
+**Actions:**
+- **Corrected the doc** to A6 HELD/BLOCKING (superseding the store-level PASS), committed `a948b9c`.
+- **ACK'd TL** (aligned, bar locked: ≥3 consecutive zero-commit under strict no-traffic + bounded terminal escalation) and **PM** (concur HELD; AC-scope is ORCH's, QA supplies ground truth only).
+- **Corrected my stale ORCH withdrawal** — flagged that the split settled BLOCKING, not reconciled-non-blocking, with the AC-scope question (hold-strict vs relax).
+
+**`orch→qa` A6_RECORD_CORRECTION** — terminal ruling: my withdrawal is superseded, **A6 BLOCKED/RED @`ddae842`**, **A6.2 held STRICT (not relaxed)**. ORCH explicitly adopted my original ground-truth escalation ("that read was correct"). Re-verify pending at the D4-fix sha against SEC's 4 criteria. A5/A7 + A8/A9/A10 green stand, unaffected. `ask: none` — no reply needed (record correction); my doc already matched.
+
+**Net state:** A6 is **BLOCKED**, re-verify gated on the rework `e91429aa` (not yet landed — I await a QA_REVERIFY_REQUEST). A5/A7/A8/A9/A10 remain QA-green @`8321d9d`. Updated [[probe-retry-loops-to-decay-point]] to the final BLOCKING outcome and banked PM's rule — *a non-blocking label must not silently relax a locked AC* — plus the meta-lesson: don't withdraw an escalation the moment planners *appear* to reconcile when that reconciliation relaxes a locked AC; my reproduced decay was the one durable artifact while the verdicts churned. All messages marked read.
+Inbox clear; flags in flight; lesson banked.
+
+## Summary
+
+Processed four messages across two reads this turn — the A6 verdict flapped again, into a **high-stakes contradiction**.
+
+**State received:**
+- **ORCH** `A6_ACCEPTED_FINAL` — reversed its own strict rulings: A6 **non-blocking, OPT-3 mergeable, merge GoDecision issued to plat**.
+- **TL** `A6_RULING_ADOPTED` — A6 **D4 BLOCKING, A6.2 strict**, my reproduction was right, **plat building the fix** `7ba73278`.
+- **PM** (two ACKs) — fully **realigned to ORCH-strict** (`04e7507`), withdrawing its earlier acceptance; credits my reproduction as load-bearing.
+
+**The catch I surfaced:** ORCH's acceptance cited PM `93a85d7` + TL `daae26c` as its basis — **both withdrawn by their own authors** (PM `04e7507`; TL `554496eb`). So a merge GoDecision rests on two retracted pillars while TL+plat treat A6 as blocking and are building a fix. The GoDecision and the fix-build can't both be live.
+
+**Action taken** (fail-closed, without overstepping):
+- Did **not** clear A6 either way, and did **not** override ORCH's GoDecision (R6).
+- **Flagged ORCH** with the evidence (`ChallengeThread`: cited basis withdrawn, GoDecision ⊥ fix-build) asking for **one authoritative state** before A6 lands; **notified TL** of the ORCH-state conflict.
+- Holding A6 **unverified-for-merge** pending ORCH's single-valued confirmation. A5/A7/A8/A9/A10 remain QA-green and unaffected.
+- Recorded the live contradiction in the verify doc (`24ecfd3`).
+
+**Standing position:** my reproduced rq-counter self-cancel is the one stable artifact through ~6 verdict flips; it either routes to backlog (if ORCH confirms accepted) or gates the fix at the new sha against the locked bar (N≥5 zero-traffic re-drive every cycle + bounded terminal escalation + unread + real re-drive + `failed_no_commit` ledger + FP inert) once `e91429aa`/`7ba73278` lands. Banked [[audit-verdict-basis-freshness]] — audit a verdict's cited basis for withdrawals before treating it as binding; anchor to the reproduction, not the flapping verdicts. All messages marked read.
+Inbox clear. The A6 saga is fully resolved across all roles.
+
+## Summary
+
+Processed four messages (two reads) — the A6 verdict **converged** after its long oscillation.
+
+**Final authoritative state (binding, all 5 roles agree):** **A6 ACCEPTED non-blocking @`ddae842`** on a *principled, clean basis* — not the withdrawn pillars I'd flagged.
+
+**What resolved it:** A newer ORCH ruling (`A6_BLOCK_LIFTED` `36ef505d`/`b45027f7`, issued *after* my flag) that I hadn't yet seen, re-grounded on **SEC's ledger-observability test** + ORCH's own first-hand code read:
+> D4 writes a `failed_no_commit` ledger row **every** zero-commit cycle (`agent_reactor.py:380`, unconditional) → the failure is **observable/ledgered → NOT silent consumption** → A6's locked intent is met. D1 (@`8321d9d`) had no ledger (truly silent → correctly blocked). **A6 clears WITHOUT relaxing A6.2** — the discriminator is observability, not future-traffic-reliance.
+
+**My handling (per [[audit-verdict-basis-freshness]]):** I tested the new basis against my *own* reproduction before aligning — my E2E had logged **3 `failed_no_commit` rows for 3 drives**, confirming ledger-every-cycle. That correctly **re-characterized** my reproduced rq-counter self-cancel: it's reduced *retry autonomy*, **not** silent loss (ledgered + ticket persists unread). So I dropped the BLOCKING hold and realigned to ACCEPTED — following fresh verified evidence, not consistency-bias.
+
+**ORCH directly validated the basis-integrity flag:** *"Sharp catch… that citation was sloppy. The ruling holds, but on a CLEAN non-withdrawn basis… basis-integrity check + hold-for-confirm (no R6 override) was exactly the right move."*
+
+**Actions:** dropped the hold (commit `4e1a63b`), ACK'd TL + PM with independent corroboration of the ledger-observability claim, closed my ORCH challenge thread, and marked all read. **Outcome:** full OPT-3+OPT-5 bundle mergeable to plat; A5/A7/A8/A9/A10 green stand @`8321d9d`; my reproduction routes to non-blocking backlog `tkt-fleet-opt-OPT-3-A6-rqcounter` (monotonic counter + retry ceiling K + terminal `failed_no_commit_escalated→TL` + N≥5 regression). No further QA action until the separate OPT-1b enforce-flip re-gate.
+
+Banked the sharpened lessons: when an authority re-grounds a verdict, test the *new* basis against your reproduction before realigning; and in a *silent*-consumption AC the discriminator is **observability (durable ledger trace)**, not retry aggressiveness — my "silent loss" tag was imprecise on exactly the word the resolution turned on. Reproduce-first anchored the correct outcome through the entire planner/supervisor-layer oscillation.
+Inbox clear. OPT-8 verify complete and routed.
+
+## Summary
+
+Fresh verify request from TL — **OPT-8.1-shadow + 8.2 + 8.3 @`e2cf2e8`** vs PM ACs B1-B5/C1-C4/D1-D4 (dispatch `bc108e6`). Verified on a clean isolated worktree (live tree is OPT-1a-dirty; content confirmed stable at the sha), with fails-closed run at base `a849098`.
+
+**Verdict: PARTIAL — 12/13 GREEN, C2 HELD.**
+
+**GREEN (11 ACs + all fails-closed):**
+- **B1-B5** (ready-queue shadow): enqueue→inspectable; shadow-log fields + `SCHED_ENFORCE` both directions ("byte-identical" holds because the shadow module is standalone — reactors untouched at this sha); **B3 one-queue is non-tautological** (governor drains head, scheduler returns the *other* entry from the same `_QUEUE`); push-assign fallback works; fails-closed RED at base.
+- **C1, C3, C4** (peer_review): `peer_review` 0→5 across be/fe/plat/qa/sec with `ReviewVerdict`; verdict routing non-arch→qa / arch→tl; fails-closed.
+- **D1-D4** (arch trigger): mechanical globs fire on the right paths and — verified via a **negative control** — correctly *don't* trigger on `README.md`/`src/main.py` (no over-glob); **D3 no-rigor-gap** proven (`required_gates(non-arch)=[qa,sec]`, arch adds `tl_final_review`); fails-closed.
+- Suite **45/45** green at clean `e2cf2e8`.
+
+**C2 HELD (scoped fidelity challenge to PM):** the code and its test use a **static `qa → "be"`**, but PM's locked table says qa's peer is *"the implementer whose tests are under review"* (dynamic) — and `resolve_peer(role)` takes no PR context, so dynamic resolution is impossible by signature. The C2 test asserts `"be"`, i.e. it validates the implementation's substitution rather than the PM criterion (the "test the paraphrase, not the locked AC" trap). Root cause: the PM dispatch is **internally inconsistent** — a "static table" containing a dynamic qa entry. be/fe/plat/sec rows are faithful.
+
+**Routed:** TestReport (per-AC results, PARTIAL) → TL (requester); scoped `ChallengeThread` → PM (AC owner) asking it to adjudicate — either confirm static `qa→be` for this shadow phase (→ C2 GREEN, full B/C/D clears QA) or require dynamic resolution (→ request-changes). Everything else is unblocked; SEC leg is separate. Verdict doc committed (`1818e41`); request marked read.
+Inbox clear.
+
+## Summary
+
+**`tl→qa` QA_PARTIAL_ACK** — TL accepted my 12/13 GREEN partial on OPT-8.1-shadow+8.2+8.3 @`e2cf2e8`, independently confirming B3 (one-queue non-tautological) and D3 (no-rigor-gap) match its final_review, and endorsing my C2 hold + route-to-PM as correct.
+
+**On C2:** TL sent PM an arch ruling recommending the qa-pairing be relaxed to **static qa→be** (qa PRs rare; dynamic "whose-tests" resolution needs PR-context = over the complexity ceiling). That rationale aligns with the PM table's own header ("static, no per-PR TL judgment") — the dynamic qa wording was the inconsistent entry. The final call stays with PM (AC owner); my challenge `0e868b66` is in flight there.
+
+**My response (ACK, no new question posed):** confirmed the finalization path — on PM's static ruling, **C2 flips to GREEN with no code/test change** (impl returns qa→be and the C2 test already asserts qa→be, so a static-clarified AC makes both faithful), after which I issue full B/C/D QA-GREEN. Flagged that I'm treating the relaxation as a *clarification* of an internally-inconsistent locked entry (aligns to PM's static header), not a substantive re-open — though the lock call is PM/ORCH's, not mine. Also noted the SEC flip carry-forward (live scheduler must invoke sec+qa per `required_gates`) is a **flip-gate AC, out of shadow scope** — I'll gate it at the flip sha, not here.
+
+**State:** holding C2 only, pending PM's ruling; B1-B5/C1/C3/C4/D1-D4 stand GREEN; verdict doc committed (`1818e41`). Once C2 clears → 8.2/8.3 final → TL's 8.4 regen assignment. Message marked read.
+You've hit your session limit · resets 7:20pm (America/Los_Angeles)

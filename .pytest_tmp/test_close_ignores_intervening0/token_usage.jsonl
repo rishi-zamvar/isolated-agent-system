@@ -1,0 +1,3 @@
+{"role": "pm", "in": 600000, "ts": 10}
+{"role": "pm", "in": 590000, "ts": 25}
+{"role": "pm", "in": 22000, "ts": 30, "compacted": true}

@@ -1,0 +1,38 @@
+[bridge] watching C:\Users\zeebo\.dispatch\wake-touches (poll=2.0s); draining backlog on start
+sent id=c742cc73-c4c0-4f94-a05d-d7789dbb0227 to=orch new=True
+--- e01fe036d474 ---
+  from: ceo  to: swe  priority: normal  status: read
+  thread: -
+  ts:     2026-06-02T09:33:35Z
+  subject: ZeeChat: hi
+
+hi
+[bridge] injected CEO msg e01fe036d474 -> orch (FreeText intake_intent)
+sent id=890ccd62-eae8-41d3-80a9-6b247e91a1f1 to=orch new=True
+--- 87ce58000c72 ---
+  from: ceo  to: swe  priority: normal  status: read
+  thread: -
+  ts:     2026-06-12T21:40:51Z
+  subject: ZeeChat: can you see this
+
+can you see this
+[bridge] injected CEO msg 87ce58000c72 -> orch (FreeText intake_intent)
+sent id=de3f81f3-fa39-4b31-8539-9e6816db29c3 to=orch new=True
+--- e81e15957b72 ---
+  from: ceo  to: swe  priority: normal  status: read
+  thread: -
+  ts:     2026-06-23T13:55:16Z
+  subject: ZeeChat: hi
+
+hi
+[bridge] injected CEO msg e81e15957b72 -> orch (FreeText intake_intent)
+[bridge] polling dispatch DB every 2.0s for unread CEO messages
+sent id=a0877865-b984-4838-a5a9-c1c3c80900d3 to=orch new=True
+--- f098abe5de30 ---
+  from: ceo  to: swe  priority: normal  status: read
+  thread: -
+  ts:     2026-06-30T16:47:07Z
+  subject: ZeeChat: hi
+
+hi
+[bridge] injected CEO msg f098abe5de30 -> orch (FreeText intake_intent)
