@@ -1,0 +1,120 @@
+"""zeechat_orch_bridge — shuttle CEO ZeeChat messages into the fleet ORCH.
+
+Replaces the legacy dispatch `swe` reactor. A persistent OS process (scheduled
+task / NSSM service on the PC) watches the dispatch daemon's wake-touch dir; on
+each new touch it reads any unread CEO ZeeChat message from the dispatch DB and
+injects it onto the agentctl bus as a FreeText envelope addressed to ORCH, then
+marks it handled via the daemon. It calls NO Claude itself — ORCH's warm reactor
+does the thinking. Decoupled from the ZeeChat-critical dispatch daemon: read-only
+DB access for discovery; daemon-owned `dispatchctl read` for marking.
+"""
+
+import json
+import os
+import shlex
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DISPATCH_DB = Path(os.environ.get("DISPATCH_DB",
+                                  str(Path.home() / ".dispatch" / "dispatch.db")))
+
+# Interpreter used to run `-m agentctl.cli`. Default to the bridge's own
+# interpreter so it works wherever the bridge runs (Windows has no reliable
+# `python3` on PATH — bare `python3` hits a Microsoft Store shim). Override
+# with BRIDGE_PYTHON.
+PYTHON = os.environ.get("BRIDGE_PYTHON", sys.executable)
+
+# Command prefix to reach the dispatch CLI (owns the dispatch DB; used to mark a
+# message handled). On the Mac `dispatchctl` is on PATH; on the PC it is not, so
+# set DISPATCHCTL_CMD="py C:/ZeeCloud/Projects/dispatch/dispatch-cli/dispatchctl.py".
+DISPATCHCTL = shlex.split(os.environ.get("DISPATCHCTL_CMD", "dispatchctl"))
+
+
+def unread_ceo_messages(db_path) -> list[tuple[str, str]]:
+    """(id, body) for unread CEO ZeeChat inbound messages, oldest first."""
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        cur = con.execute(
+            "SELECT id, body FROM messages "
+            "WHERE from_role='ceo' AND subject LIKE 'ZeeChat:%' "
+            "AND (read_at IS NULL OR read_at='') "
+            "ORDER BY created_at ASC")
+        return [(r[0], r[1]) for r in cur.fetchall()]
+    finally:
+        con.close()
+
+
+def _log(msg: str) -> None:
+    """Single-line stdout log (captured to bridge.out by the task wrapper)."""
+    print(f"[bridge] {msg}", flush=True)
+
+
+def _run(cmd, runner):
+    return (runner or (lambda c: subprocess.run(c, check=False)))(cmd)
+
+
+def inject_to_orch(msg_id: str, text: str, *, store, wake_dir, runner=None):
+    """Inject a CEO message onto the agentctl bus as FreeText->orch. Returns the
+    runner result (rc==0 on success). FreeText is consumed by orch, so it validates."""
+    payload = json.dumps({"source": "zeechat", "origin": "ceo",
+                          "msg_id": msg_id, "text": text})
+    cmd = [PYTHON, "-m", "agentctl.cli", "--store", str(store),
+           "--wake-dir", str(wake_dir), "send",
+           "--from", "orch", "--to", "orch",
+           "--type", "FreeText", "--event", "intake_intent",
+           "--payload", payload]
+    return _run(cmd, runner)
+
+
+def mark_handled(msg_id: str, *, runner=None):
+    """Mark a CEO message handled via the daemon (owns the dispatch DB)."""
+    return _run([*DISPATCHCTL, "read", msg_id], runner)
+
+
+def react_once(*, db_path=None, store, wake_dir, inject=None, mark=None) -> int:
+    """Process all unread CEO messages once. Marks a message handled ONLY after a
+    successful inject (rc==0), so a failed inject leaves it unread for retry.
+    Returns the count successfully injected. `inject`/`mark` are injectable for tests."""
+    db_path = db_path or DISPATCH_DB
+    inject = inject or (lambda mid, txt: getattr(
+        inject_to_orch(mid, txt, store=store, wake_dir=wake_dir), "returncode", 1))
+    mark = mark or (lambda mid: mark_handled(mid))
+    done = 0
+    for mid, body in unread_ceo_messages(db_path):
+        if inject(mid, body) == 0:
+            mark(mid)
+            done += 1
+            _log(f"injected CEO msg {mid} -> orch (FreeText intake_intent)")
+        else:
+            _log(f"inject FAILED for CEO msg {mid}; left unread for retry")
+    return done
+
+
+def loop(*, poll: float = 2.0, react=None, store=None, wake_bus=None,
+         max_iters: int | None = None, react_on_start: bool = True) -> int:
+    """Poll the dispatch DB every `poll` seconds and drain any unread CEO messages
+    onto the agentctl bus. CEO ZeeChat (chat-path) messages do NOT produce dispatch
+    wake-touches, so we poll the DB directly rather than watch a wake dir. `react`
+    defaults to react_once; idempotent (marks handled), so re-polling is safe.
+    Returns the number of react calls (for tests)."""
+    if react is None:
+        react = lambda: react_once(store=store, wake_dir=wake_bus)
+    _log(f"polling dispatch DB every {poll}s for unread CEO messages")
+    reacts = 0
+    if react_on_start:
+        react(); reacts += 1
+    i = 0
+    while max_iters is None or i < max_iters:
+        react(); reacts += 1
+        time.sleep(poll)
+        i += 1
+    return reacts
+
+
+if __name__ == "__main__":
+    store = os.environ["AGENTCTL_STORE"]
+    wake_bus = os.environ["AGENTCTL_WAKE"]
+    loop(store=store, wake_bus=wake_bus)
