@@ -93,22 +93,8 @@ def test_backfill_idempotent(tmp_path):
     assert rows[0]["durability"] == "structural"
 
 
-# ============================================== CLI cwd-independence ===
-
-
-def test_cli_default_cabinet_uses_librarian_cabinet_env(tmp_path, monkeypatch):
-    """_default_cabinet reads LIBRARIAN_CABINET env — cwd-independent."""
-    cab = tmp_path / "test_cabinet.db"
-    monkeypatch.setenv("LIBRARIAN_CABINET", str(cab))
-    from librarian.cli import _default_cabinet
-    assert _default_cabinet() == cab
-
-
-def test_cli_default_cabinet_falls_back_to_wake_dir(tmp_path, monkeypatch):
-    """Without LIBRARIAN_CABINET, falls back to AGENTCTL_WAKE/../cabinet.db."""
-    wake = tmp_path / "wake"
-    wake.mkdir()
-    monkeypatch.delenv("LIBRARIAN_CABINET", raising=False)
-    monkeypatch.setenv("AGENTCTL_WAKE", str(wake))
-    from librarian.cli import _default_cabinet
-    assert _default_cabinet() == tmp_path / "cabinet.db"
+# The two `_default_cabinet` CLI tests were removed when librarian/cli.py was
+# rewritten for the memory+RAG design (Task 8) — that helper no longer exists.
+# cabinet.py itself is retained: analytics/registry_engine.py still surfaces its
+# metrics on the dashboard. Full retirement is deferred until the dashboard's
+# librarian.* metrics migrate to the new ledger.
