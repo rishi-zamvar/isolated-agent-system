@@ -6,3 +6,9 @@ __pycache__/
 *.db-shm
 .env
 profiles/generated/
+
+# librarian runtime artifacts (rebuildable / machine-local) — seed hot.md stays tracked
+memory/**/store/
+memory/_shared/
+memory/**/hot.md.bak
+memory/ledger.jsonl
