@@ -1,68 +1,89 @@
-"""`recall` — the agents' on-demand window back into the filing cabinet.
+"""Librarian CLI — the fleet-facing surface.
 
-When an agent (or ORCH on its behalf) needs a detail that was snipped out of the
-working set — "what was the logic for X earlier?" — it searches the cabinet instead
-of carrying that context every turn. Pull it back only when needed, then forget it.
+  python -m librarian.cli ingest [--repo .] [--rebuild]     # (re)build shared code store
+  python -m librarian.cli search <role> "<query>" [--k 6]   # RAG over overlay + code
+  python -m librarian.cli curate <role> [--session-file F]  # sort session facts (stdin if no file)
+  python -m librarian.cli seed <role>                        # print hot.md (for the reactor)
+  python -m librarian.cli ledger [--token-usage PATH]        # median input tokens/role
 
-    python -m librarian.cli recall "soundcloud matcher" --role be
-    python -m librarian.cli stats
-"""
-
+Thin plumbing over the library modules; safe to invoke from the reactor."""
 import argparse
-import os
-from pathlib import Path
+import sys
 
-from librarian import cabinet
-
-
-def _default_cabinet() -> Path:
-    return Path(os.environ.get(
-        "LIBRARIAN_CABINET",
-        str(Path(os.environ.get("AGENTCTL_WAKE", ".")).parent / "cabinet.db")))
+from librarian import config
+from librarian.curate import curate
+from librarian.ingest import ingest_repo
+from librarian.ledger import report
+from librarian.memory import HotMemory, render_items
+from librarian.store import Store
 
 
-def _cmd_recall(args) -> int:
-    hits = cabinet.recall(args.cabinet, args.query, role=args.role, limit=args.limit)
-    if not hits:
-        print(f"(no cabinet matches for {args.query!r})")
-        return 0
-    for r in hits:
-        print(f"--- #{r['seq']} {r['role']} [{r['kind']}/{r['topic']}] {r['created_at']} ---")
-        print(r["body"])
-        print()
-    return 0
+def cmd_ingest(a):
+    cfg = config.load_config()
+    store = Store(config.shared_code_dir(cfg))
+    if a.rebuild:
+        store.meta["files"] = {}
+    print(ingest_repo(a.repo, store, cfg["chunk_lines"], cfg["chunk_overlap"],
+                      changed_only=not a.rebuild))
 
 
-def _cmd_stats(args) -> int:
-    s = cabinet.stats(args.cabinet)
-    saved_k = s["saved"] / 1000
-    print(f"compactions closed: {s['compactions']} (scheduled {s['scheduled']})")
-    print(f"input tokens saved: {saved_k:,.0f}k  ({s['before']:,} -> {s['after']:,})")
-    for role, slot in sorted(s["by_role"].items()):
-        print(f"  {role:5} x{slot['compactions']}  saved {slot['saved']:,}")
-    return 0
+def cmd_search(a):
+    cfg = config.load_config()
+    hits = Store(config.overlay_dir(cfg, a.role)).search(a.query, a.k)
+    hits += Store(config.shared_code_dir(cfg)).search(a.query, a.k)
+    hits.sort(key=lambda h: h["score"], reverse=True)
+    for h in hits[:a.k]:
+        print(f"[{h['score']}] {h['source']}\n    {h['text'][:400]}\n")
 
 
-def build_parser() -> argparse.ArgumentParser:
+def cmd_curate(a):
+    cfg = config.load_config()
+    summary = (open(a.session_file, encoding="utf-8").read()
+               if a.session_file else sys.stdin.read())
+    print(curate(a.role, summary, cfg))
+
+
+def cmd_seed(a):
+    cfg = config.load_config()
+    sys.stdout.write(render_items(HotMemory(config.hot_path(cfg, a.role)).load()))
+
+
+def cmd_ledger(a):
+    cfg = config.load_config()
+    print(report(cfg, a.token_usage or ""))
+
+
+def main(argv=None):
     p = argparse.ArgumentParser(prog="librarian")
-    p.add_argument("--cabinet", type=Path, default=_default_cabinet())
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    r = sub.add_parser("recall", help="search the filing cabinet")
-    r.add_argument("query")
-    r.add_argument("--role")
-    r.add_argument("--limit", type=int, default=5)
-    r.set_defaults(func=_cmd_recall)
+    pi = sub.add_parser("ingest")
+    pi.add_argument("--repo", default=".")
+    pi.add_argument("--rebuild", action="store_true")
+    pi.set_defaults(fn=cmd_ingest)
 
-    s = sub.add_parser("stats", help="show compaction savings")
-    s.set_defaults(func=_cmd_stats)
-    return p
+    ps = sub.add_parser("search")
+    ps.add_argument("role")
+    ps.add_argument("query")
+    ps.add_argument("--k", type=int, default=6)
+    ps.set_defaults(fn=cmd_search)
 
+    pc = sub.add_parser("curate")
+    pc.add_argument("role")
+    pc.add_argument("--session-file", dest="session_file")
+    pc.set_defaults(fn=cmd_curate)
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    return args.func(args)
+    pd = sub.add_parser("seed")
+    pd.add_argument("role")
+    pd.set_defaults(fn=cmd_seed)
+
+    pl = sub.add_parser("ledger")
+    pl.add_argument("--token-usage", dest="token_usage")
+    pl.set_defaults(fn=cmd_ledger)
+
+    a = p.parse_args(argv)
+    a.fn(a)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
