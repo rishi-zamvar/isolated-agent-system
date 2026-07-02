@@ -39,6 +39,7 @@ def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
     # Every worker shares the testing doctrine (comprehensive coverage + edge-case banking
     # + visual/device gates). orch ratifies, doesn't write tests, so it's omitted there.
     testing = ("\n\n" + _block("testing_block.md")) if spec.is_worker else ""
+    memory = "\n\n" + _block("memory_block.md").replace("{role}", role_id)
     fns = "\n".join(f"- `fn {f}`" for f in spec.functions)
     dens = "\n".join(f"- {d}" for d in spec.denials)
     sup = spec.supervisor or "the human"
@@ -49,7 +50,7 @@ def render_claude_md(role_id: str, spec: RoleSpec, model: str) -> str:
 
 {head}{kind_block}
 
-{shim}{testing}
+{shim}{testing}{memory}
 
 {norms}
 
