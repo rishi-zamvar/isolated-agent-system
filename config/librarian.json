@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "memory_root": "memory",
+  "hot_budget_tokens": 1500,
+  "search_k": 6,
+  "search_result_tokens": 1200,
+  "embed_device": "cpu",
+  "curator_backend": "ollama",
+  "curator_model": "qwen2.5:3b-instruct-q4_K_M",
+  "ollama_host": "http://127.0.0.1:11434",
+  "chunk_lines": 40,
+  "chunk_overlap": 8,
+  "roles": ["orch", "tl", "be", "fe", "plat", "sec"]
+}
