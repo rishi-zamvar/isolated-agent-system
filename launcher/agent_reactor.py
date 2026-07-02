@@ -18,6 +18,11 @@ import threading
 import time
 from pathlib import Path
 
+# Force UTF-8 for THIS process AND all child processes (py -, claude, subprocess).
+# Windows defaults children to cp1252 which crashes on unicode arrows in messages.
+os.environ.setdefault('PYTHONUTF8', '1')
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+
 import sys as _sys
 try:
     _sys.stdout.reconfigure(encoding='utf-8', errors='replace')
