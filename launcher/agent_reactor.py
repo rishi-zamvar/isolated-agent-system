@@ -99,6 +99,16 @@ def claude_cmd(role: str, brief_text: str | None = None,
     else:
         prompt = WAKE_PROMPT.format(role=role)
         base += ["--resume", session_id] if session_id else ["--continue"]
+    # librarian: prepend the role's persistent hot memory (best-effort, flag-gated).
+    # Done here so it rides on top of BOTH the resume/continue prompt and any brief,
+    # without disturbing which session mode was chosen above.
+    try:
+        from librarian import hooks as _lib_hooks
+        _seed = _lib_hooks.seed_brief(role)
+    except Exception:
+        _seed = None
+    if _seed:
+        prompt = _seed.rstrip() + "\n\n" + prompt
     return base + ["--model", model, "--output-format", "json", prompt]
 
 
@@ -258,6 +268,11 @@ def make_runner(role: str, token_log: Path, status_dir: Path):
             edited = _detect_edited(sig0, sig1, json.dumps(d))
             _log_usage(token_log, role, d, sid, edited, compacted,
                        requested_model=_requested_model(cmd))
+            try:
+                from librarian import hooks as _lib_hooks
+                _lib_hooks.spawn_curate(role, d.get("result", "") or "")
+            except Exception:
+                pass
             print(d.get("result", ""), flush=True)
         except Exception:
             print(r.stdout or "", flush=True)
