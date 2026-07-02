@@ -120,6 +120,13 @@ This split is a config choice, not hardwired: `config/` exposes `EMBED_DEVICE=cp
 `CURATOR_BACKEND=ollama|haiku|rules`, `CURATOR_MODEL`, and `OLLAMA_HOST`, so a different
 machine (or a dead GPU) flips to Haiku or the rule-based curator without code changes.
 
+**Model is swappable.** `CURATOR_MODEL` is passed straight through to Ollama, so any model
+Ollama can serve is a drop-in with zero code change — `qwen2.5:3b-instruct-q4_K_M` (default),
+`gemma2:2b`, `llama3.2:3b`, `phi3:mini`, a 7B if you want more judgment, etc. `curate.py`
+never hardcodes a model name; it reads the config value and sends a plain chat request, so
+the curator prompt is model-agnostic (no model-specific formatting). Swapping is
+`ollama pull <name>` + set `CURATOR_MODEL=<name>`.
+
 ---
 
 ## 5. Components
