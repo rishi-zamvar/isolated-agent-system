@@ -93,7 +93,36 @@ Frequently-used knowledge stays hot; stale knowledge becomes searchable. This is
 
 ---
 
-## 4. Components
+## 4. Hardware placement (home PC: Ryzen 7 3700X + GTX 980Ti)
+
+The librarian runs on the same PC as the fleet. Its two compute jobs — embedding text
+and running the curator LLM — map cleanly onto the two pieces of hardware, and the mapping
+is chosen for robustness, not peak FLOPS.
+
+| Job | Runs on | Why |
+|-----|---------|-----|
+| **Embedding** (fastembed / bge-small, 384-dim) | **3700X CPU** (ONNX Runtime CPU, AVX2, intra-op threads = 8 physical cores) | Zen 2 + AVX2 embeds the whole repo in seconds-to-minutes; deterministic, offline, zero driver risk. Maxwell + `onnxruntime-gpu`/CUDA is fragile for near-zero gain on a 130 MB model, and ingest is infrequent (one-time + incremental deltas). |
+| **Curator LLM** (durable-vs-episodic sort) | **980Ti GPU** via a local Ollama server (OpenAI-compatible endpoint on `127.0.0.1:11434`) | The 980Ti's compute capability 5.2 clears Ollama's 5.0 floor. Running the curator locally makes curation **zero-token / zero-API** — the cost win of this milestone, applied to the librarian itself. The 6 GB VRAM is reserved for this rather than spent on GPU embeddings. |
+
+**VRAM budget (6 GB).** Default curator model **Qwen2.5-3B-Instruct Q4_K_M (~2.3 GB)** fully
+offloaded, plus a small KV cache at a ~2K context (curation prompts are a few hundred
+tokens) — comfortably inside 6 GB with headroom. A 7B Q4_K_M (~4.4 GB) also fits fully
+offloaded if more judgment is wanted, but 3B is the snappy default on Maxwell (no tensor
+cores; ~40–60 tok/s at 3B vs ~15–25 at 7B — fine either way since curation is offline and
+non-blocking). `keep_alive` unloads the model when idle so it costs no VRAM between runs.
+
+**Concurrency.** Ingest batches across the 3700X's 16 threads via fastembed's internal
+batching (intra-op = 8, and process a few chunk-batches in parallel). Curation is
+single-flight per role (§7 lock), so at most a handful of short LLM calls are queued to
+the one GPU — no contention design needed.
+
+This split is a config choice, not hardwired: `config/` exposes `EMBED_DEVICE=cpu`,
+`CURATOR_BACKEND=ollama|haiku|rules`, `CURATOR_MODEL`, and `OLLAMA_HOST`, so a different
+machine (or a dead GPU) flips to Haiku or the rule-based curator without code changes.
+
+---
+
+## 5. Components
 
 Reuse what exists; reorient the rest. Files under `librarian/`:
 
@@ -102,7 +131,8 @@ Reuse what exists; reorient the rest. Files under `librarian/`:
 | `embed.py` | **Keep** | fastembed (BAAI/bge-small-en-v1.5, 384-dim, ONNX, CPU, zero-token) + deterministic lexical fallback. Already implements exactly this. |
 | `store.py` | **New** (replaces `cabinet.py`'s role) | Per-store vector index on disk: chunk, embed, upsert, cosine top-k search, incremental re-ingest by content hash. One instance per store dir (`<role>/store`, `_shared/code`). Pure-Python + numpy-free (lists + math) to hold the "no new heavy deps" rule; fastembed already pulls numpy so numpy is acceptable if present. |
 | `memory.py` | **New** | Read/write `hot.md`, parse items + metadata (frontmatter per item), enforce token budget, back up before write. Pure, no LLM. |
-| `curate.py` | **New** | The Haiku relevance-sorter: given the session outcome + current hot items, classify durable vs episodic, apply decay/eviction, write hot.md + append evicted items to the overlay store. Degrades safe: on any error, leave hot.md unchanged. |
+| `curate.py` | **New** | The relevance-sorter: given the session outcome + current hot items, classify durable vs episodic, apply decay/eviction, write hot.md + append evicted items to the overlay store. Calls the curator backend via a thin `curator_client` (default: local Ollama on the 980Ti — see §4). Degrades safe: on any error, leave hot.md unchanged. |
+| `curator_client.py` | **New** | One interface, three backends: `ollama` (local, default — POST to `OLLAMA_HOST/api/chat`), `haiku` (API fallback), `rules` (deterministic embedding-similarity + heuristics, no model). Selected by `CURATOR_BACKEND`. Isolates curate.py from where the judgment runs. |
 | `ingest.py` | **New** | Walk the target repo, chunk files (code-aware: by symbol/def where cheap, else fixed-size with overlap), feed `store.py`. Incremental by per-file content hash manifest. |
 | `cli.py` | **Rewrite** | Subcommands: `ingest [--repo P]`, `search <role> "<q>" [--k N]`, `curate <role>`, `seed <role>` (prints hot.md for the reactor), `ledger`. |
 | `cabinet.py`, `daemon.py`, `distill.py`, `relevance.py` | **Retire/fold** | Superseded. Salvage `relevance.py`'s scope-vector idea into `curate.py`; drop the live-compaction daemon (replaced by post-run curate). |
@@ -130,7 +160,7 @@ and when to search vs when to trust hot memory. Generated via the existing
 
 ---
 
-## 5. Data formats
+## 6. Data formats
 
 ### `hot.md` (per role)
 
@@ -168,12 +198,13 @@ Plain text, ranked, source-labelled, token-bounded (default k=6, ~1200 tokens):
 
 ---
 
-## 6. Error handling & safety
+## 7. Error handling & safety
 
 | Failure | Behavior |
 |---------|----------|
 | fastembed missing/unavailable | `embed.py` lexical fallback (already implemented). Search degrades in quality, never hard-fails. |
-| Curator (Haiku) errors or times out | `hot.md` left unchanged. Memory is never lost on a bad curate. |
+| Local curator (Ollama on 980Ti) down / model not pulled / times out | `curator_client` falls back: `ollama → rules` (deterministic, no model) by default, or `→ haiku` if configured. If all fail, `hot.md` is left unchanged. Memory is never lost on a bad curate. |
+| GPU unavailable / VRAM contended | Ollama runs the model on the 3700X CPU (slower but correct), or `CURATOR_BACKEND=rules` skips the model entirely. |
 | Store dir corrupt / unreadable | Search returns empty (agent falls back to reading files); `ingest --rebuild` recreates it from source. |
 | `hot.md` write | Atomic (temp + rename) + timestamped backup kept (`hot.md.bak`) before every curate. |
 | Librarian disabled or crashing | `LIBRARIAN_ENABLED=0` → reactor behaves exactly as today. The fleet never depends on the librarian to function. |
@@ -184,14 +215,16 @@ deleted. Nothing an agent learned is ever destroyed by curation.
 
 ---
 
-## 7. Measurement (definition of success)
+## 8. Measurement (definition of success)
 
 The ledger must *prove* the saving, not assume it:
 
 - **Primary:** median input-tokens/run per role, 10-run trailing window, before vs after
   enablement. Target: material drop for `tl`/`orch` (the expensive roles).
 - **Secondary:** seeded tokens/run (hot.md size — must stay bounded), search calls/run,
-  search hit-rate.
+  search hit-rate. Curation adds **no** API cost to compare against — it runs locally on
+  the 980Ti — so the only new paid tokens are the seeded hot.md + on-demand search results,
+  both bounded by §6 budgets. The saving is nearly pure.
 - **Guardrail:** green-gate pass-rate and ReviewVerdict quality must not regress. Cost cuts
   that lower quality are failures (the user's explicit constraint).
 
@@ -200,20 +233,22 @@ one window, compare, then roll forward if the guardrail holds.
 
 ---
 
-## 8. Rollout
+## 9. Rollout
 
-1. Build + unit-test all modules on the Mac checkout (offline, fastembed installed).
-2. Ingest the isolated-agent-system repo into `_shared/code`; sanity-check search quality.
-3. Seed lean starter `hot.md` per role from known durable facts (envelope rules, model
+1. Build + unit-test all modules on the Mac checkout (offline, fastembed installed;
+   curator tests run against `CURATOR_BACKEND=rules` so they need no GPU/model).
+2. On the PC: install Ollama, `ollama pull qwen2.5:3b-instruct-q4_K_M`, confirm it loads
+   onto the 980Ti (`ollama ps` shows GPU), smoke-test a curation prompt end-to-end.
+3. Ingest the isolated-agent-system repo into `_shared/code`; sanity-check search quality.
+4. Seed lean starter `hot.md` per role from known durable facts (envelope rules, model
    presets, path conventions) so agents start warm, not blank.
-4. Deploy to the PC; enable for `be`/`fe`/`plat` with `LIBRARIAN_ENABLED=1`; leave
-   `tl`/`orch` as control.
-5. Run real fleet work; read the ledger after ~10 runs/role.
-6. If input-tokens drop and the green-gate/review guardrail holds, enable fleet-wide.
+5. Enable for `be`/`fe`/`plat` with `LIBRARIAN_ENABLED=1`; leave `tl`/`orch` as control.
+6. Run real fleet work; read the ledger after ~10 runs/role.
+7. If input-tokens drop and the green-gate/review guardrail holds, enable fleet-wide.
 
 ---
 
-## 9. Open questions (resolved defaults)
+## 10. Open questions (resolved defaults)
 
 - **Curate trigger:** post-run in the reactor (not a separate daemon). Simpler, no extra
   process, naturally scoped to "what just happened."
@@ -223,5 +258,8 @@ one window, compare, then roll forward if the guardrail holds.
   ~40-line windows with 8-line overlap. Docs/markdown by heading.
 - **Budget:** 1,500 tokens hot / k=6 search / ~1,200 token result. All configurable in
   `config/`.
-- **Dep:** fastembed only (already the intended embedder). numpy is acceptable (fastembed
-  pulls it). No other new deps.
+- **Curator backend:** local Ollama on the 980Ti (zero-token), `rules` as the no-model
+  fallback, Haiku only if explicitly configured. See §4 for the hardware rationale.
+- **Deps:** fastembed (embedder; pulls numpy — acceptable) + Ollama as an external local
+  service (not a Python dep — talked to over HTTP; `rules` backend works without it). No
+  other new Python deps.
